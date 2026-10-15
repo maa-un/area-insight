@@ -12,7 +12,7 @@
 |---|---|---|
 | `apps/batch` | 公的データを取得して BigQuery に保存するバッチ | イメージ → Cloud Run Jobs |
 | `apps/api` | ログインユーザーのお気に入り等を Firestore に保存する API | イメージ → Cloud Run |
-| `apps/web` | 画面（React + Vite）。全ページをビルド時に HTML に書き出す | Cloud Storage + Cloud CDN |
+| `apps/web` | 画面（React + Vite + shadcn/ui）。全ページをビルド時に HTML に書き出す | Cloud Storage + Cloud CDN |
 | `packages/shared` | 3 つで共有する型と zod スキーマ | — |
 
 ## 開発
