@@ -8,6 +8,10 @@ describe("prerender", () => {
     expect(html).toContain("不動産情報ライブラリ");
   });
 
+  it("renders the unauthorized page", () => {
+    expect(render("unauthorized")).toContain("認証が必要です");
+  });
+
   it("renders the not-found page", () => {
     expect(render("not-found")).toContain("ページが見つかりません");
   });

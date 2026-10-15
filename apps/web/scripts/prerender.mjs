@@ -9,6 +9,7 @@ const { render } = await import(`${root}/dist-ssr/entry-server.js`);
 const pages = [
   { page: "home", file: "index.html" },
   { page: "not-found", file: "404.html" },
+  { page: "unauthorized", file: "401.html" },
 ];
 
 for (const { page, file } of pages) {

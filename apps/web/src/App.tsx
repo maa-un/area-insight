@@ -7,14 +7,14 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 
-export type Page = "home" | "not-found";
+export type Page = "home" | "not-found" | "unauthorized";
 
 export function App({ page }: { page: Page }) {
   return (
     <div className="flex min-h-svh flex-col bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-12 sm:py-16">
-        {page === "home" ? <Home /> : <NotFound />}
+        {page === "home" ? <Home /> : page === "unauthorized" ? <Unauthorized /> : <NotFound />}
       </main>
       <SiteFooter />
     </div>
@@ -107,6 +107,19 @@ function NotFound() {
           トップへ戻る
         </a>
       </Button>
+    </section>
+  );
+}
+
+// 開発中に Basic 認証で保護している間、ロードバランサが 401 と一緒に返すページ。
+function Unauthorized() {
+  return (
+    <section className="flex flex-col items-center gap-4 text-center">
+      <Badge variant="secondary">401</Badge>
+      <h1 className="text-2xl font-bold tracking-tight">認証が必要です</h1>
+      <p className="text-muted-foreground">
+        このサイトは公開準備中です。案内された ID とパスワードでアクセスしてください。
+      </p>
     </section>
   );
 }
