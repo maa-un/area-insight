@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-ssr/
+coverage/
+*.tsbuildinfo
+
+# 認証情報（API キーなど）はコミットしない。
+.envrc
+.env
+.env.*
+!.env.example
+
+.DS_Store
