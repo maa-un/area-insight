@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  AreaDetail,
+  AreaMetricsFile,
   CompareList,
   MunicipalityCode,
   PREFECTURE_CODES,
   PrefectureCode,
+  prefectureName,
   SavedFilter,
 } from "./index.js";
 
@@ -44,5 +47,46 @@ describe("user data", () => {
       conditions: { maxPrice: 500, use: "residential", onlyAkiya: true },
     };
     expect(SavedFilter.parse(filter)).toEqual(filter);
+  });
+});
+
+describe("prefectureName", () => {
+  it("maps codes to names", () => {
+    expect(prefectureName("01")).toBe("北海道");
+    expect(prefectureName("13")).toBe("東京都");
+    expect(prefectureName("47")).toBe("沖縄県");
+  });
+});
+
+describe("AreaMetricsFile", () => {
+  it("accepts a file with nullable metrics", () => {
+    const file = {
+      asOf: "2026-09-30",
+      sample: true,
+      areas: [
+        {
+          code: "13101",
+          prefectureCode: "13",
+          name: "千代田区",
+          tradePrice: null,
+          tradeCount: 0,
+          vacancyRate: 12.3,
+          population: 68000,
+          populationChangeRate: 2.1,
+          grossYield: null,
+          monthlyRent: null,
+          center: [139.75, 35.69],
+        },
+      ],
+    };
+    expect(AreaMetricsFile.parse(file)).toEqual(file);
+  });
+
+  it("rejects a quarter label in the wrong form", () => {
+    const detail = { code: "13101", quarters: [{ period: "2025-2", price: 1, count: 1 }] };
+    expect(
+      AreaDetail.safeParse({ ...detail, years: [], populationHistory: [], recentTransactions: [] })
+        .success,
+    ).toBe(false);
   });
 });

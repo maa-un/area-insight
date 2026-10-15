@@ -5,6 +5,8 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // MapLibre の Worker は ES モジュールとして読み込まれる
+  worker: { format: "es" },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

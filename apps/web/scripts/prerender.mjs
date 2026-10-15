@@ -1,23 +1,49 @@
-// vite build で作った dist/index.html をひな形に、各ページの HTML を書き出す。
-import { readFile, rm, writeFile } from "node:fs/promises";
+// vite build で作った dist/index.html をひな形に、各ページの HTML と sitemap.xml を書き出す。
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const template = await readFile(`${root}/dist/index.html`, "utf8");
-const { render } = await import(`${root}/dist-ssr/entry-server.js`);
+const { render, pages } = await import(`${root}/dist-ssr/entry-server.js`);
 
-const pages = [
-  { page: "home", file: "index.html" },
-  { page: "not-found", file: "404.html" },
-  { page: "unauthorized", file: "401.html" },
-];
+// 公開する URL のオリジン。sitemap と canonical に使う。
+const origin = process.env.SITE_ORIGIN ?? "https://gc.maa-un.com";
 
-for (const { page, file } of pages) {
+const escapeHtml = (value) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+// </script> で埋め込みが閉じないよう、JSON の < を逃がす。
+const embedJson = (value) => JSON.stringify(value).replaceAll("<", "\\u003c");
+
+const list = pages();
+for (const { route, file, path, head } of list) {
+  const headTags = [
+    `<title>${escapeHtml(head.title)}</title>`,
+    head.description && `<meta name="description" content="${escapeHtml(head.description)}" />`,
+    path && `<link rel="canonical" href="${origin}${path}" />`,
+  ]
+    .filter(Boolean)
+    .join("\n    ");
   const html = template
-    .replace("<!--app-->", render(page))
-    .replace("<body>", `<body data-page="${page}">`);
+    .replace(/<title>.*?<\/title>\s*<meta name="description"[^>]*>/s, headTags)
+    .replace("<!--app-->", render(route))
+    .replace(
+      "<!--route-->",
+      `<script type="application/json" id="route">${embedJson(route)}</script>`,
+    );
+  await mkdir(dirname(`${root}/dist/${file}`), { recursive: true });
   await writeFile(`${root}/dist/${file}`, html);
 }
 
+const urls = list.flatMap(({ path }) => (path ? [`  <url><loc>${origin}${path}</loc></url>`] : []));
+await writeFile(
+  `${root}/dist/sitemap.xml`,
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`,
+);
+
 await rm(`${root}/dist-ssr`, { recursive: true, force: true });
-console.log(`prerendered ${pages.length} pages`);
+console.log(`prerendered ${list.length} pages`);
