@@ -1,0 +1,77 @@
+name: deploy web
+
+# 画面をビルドしてサイト用バケットへ置き、Cloud CDN のキャッシュを消す。
+# データ更新後はバッチの Workflows が repository_dispatch（data-updated）で起動する。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [data-updated]
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SITE_BUCKET: ${{ vars.SITE_BUCKET }}
+      URL_MAP: ${{ vars.URL_MAP }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @area-insight/web build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      # 先にハッシュ付きの assets を置いてから HTML を差し替え、配信中の HTML が
+      # まだ無い assets を参照する時間を作らない。古い assets はキャッシュ中の HTML のために残す。
+      - name: Upload assets
+        run: |
+          gcloud storage rsync apps/web/dist/assets "gs://${SITE_BUCKET}/assets" \
+            --recursive \
+            --cache-control="public, max-age=31536000, immutable"
+
+      - name: Upload pages
+        run: |
+          gcloud storage rsync apps/web/dist "gs://${SITE_BUCKET}" \
+            --recursive \
+            --exclude="^assets/" \
+            --delete-unmatched-destination-objects \
+            --cache-control="public, max-age=300"
+
+      - name: Invalidate CDN cache
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache "${URL_MAP}" \
+            --path "/*" \
+            --global \
+            --async \
+            --project "${GCP_PROJECT_ID}"
