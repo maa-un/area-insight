@@ -8,6 +8,10 @@
   （集計は BigQuery 上で行う）。ロードジョブの `WRITE_TRUNCATE` で同じ範囲を置き換え、何度実行しても結果が同じになるようにする
 - `apps/api`: 保存 API。Clerk のセッショントークンを検証し、本人のデータだけを読み書きする
 - `apps/web`: 画面。全ページをビルド時に静的生成し、CDN から配る。アクセス時にサーバーも BigQuery も動かさない
+  - UI は shadcn/ui（Tailwind CSS v4 + Radix UI、アイコンは lucide）。部品は `pnpm dlx shadcn@<固定版> add <名前>` で
+    `src/components/ui` にコピーして使い、UI/UX の質を重視する
+  - ログインは Clerk（Google SSO のみ）。`src/lib/auth.ts` が Clerk 本体を必要なときだけ読み込む
+    （ログインボタンを押したとき、またはログイン済みの Cookie があるとき）。閲覧だけの人には読み込ませない
 - `packages/shared`: 型と zod スキーマ。外部から来るデータ（API 応答、リクエスト本文）は必ず zod で検証する
 
 インフラは maaun-terraform で管理する。このリポジトリにインフラ定義を置かない。

@@ -43,6 +43,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @area-insight/web build
+        env:
+          # Clerk の公開キー（pk_...）。未設定ならログイン機能を出さずにビルドする。
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
