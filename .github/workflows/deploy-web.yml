@@ -42,7 +42,8 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @area-insight/web build
+      # 末尾の ... で依存先（packages/shared）も先にビルドする。shared は dist を参照されるため。
+      - run: pnpm --filter "@area-insight/web..." build
         env:
           # Clerk の公開キー（pk_...）。未設定ならログイン機能を出さずにビルドする。
           VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
