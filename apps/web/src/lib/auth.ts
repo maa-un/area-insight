@@ -23,7 +23,7 @@ function setState(next: AuthState): void {
   for (const listener of listeners) listener();
 }
 
-function subscribe(listener: () => void): () => void {
+export function subscribeAuth(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -31,10 +31,14 @@ function subscribe(listener: () => void): () => void {
 export function useAuth(): AuthState {
   // 静的生成した HTML とハイドレーション直後は同じ値を返し、表示のずれを起こさない。
   return useSyncExternalStore(
-    subscribe,
+    subscribeAuth,
     () => state,
     () => initialState,
   );
+}
+
+export function getAuthState(): AuthState {
+  return state;
 }
 
 // Clerk はログイン済みのブラウザに __client_uat（最終ログイン時刻、未ログインなら 0）を置く。
