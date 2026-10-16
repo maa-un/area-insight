@@ -5,7 +5,7 @@ import { metricsSql } from "./metrics-sql.js";
 describe("metricsSql", () => {
   const sql = metricsSql("proj.ds");
 
-  it("rebuilds the five metric tables from the raw tables", () => {
+  it("rebuilds the metric tables and the data sources from the raw tables", () => {
     const targets = sql.rebuild.map((q) => /CREATE OR REPLACE TABLE `([^`]+)`/.exec(q)?.[1]);
     // area_details は land_price_points（住宅地の地価）を読むため、その後に作る
     expect(targets).toEqual([
@@ -14,15 +14,25 @@ describe("metricsSql", () => {
       "proj.ds.area_details",
       "proj.ds.district_land_prices",
       "proj.ds.station_metrics",
+      "proj.ds.data_sources",
     ]);
     expect(sql.rebuild.join("\n")).toContain("`proj.ds.raw_transactions`");
   });
 
   it("exports each table with the export id to its own folder", () => {
     const exports = sql.exports("bucket-1", "2026-10-16T00:00:00.000Z");
-    expect(exports).toHaveLength(5);
-    expect(exports[0]).toContain("gs://bucket-1/exports/area_metrics/*.json");
+    expect(exports).toHaveLength(6);
+    expect(exports[0]).toContain("gs://bucket-1/exports/data_sources/*.json");
     expect(exports[0]).toContain("'2026-10-16T00:00:00.000Z' AS export_id");
+  });
+
+  it("dates each metric from its raw table", () => {
+    const sources = sql.rebuild[5] ?? "";
+    expect(sources).toContain("'tradePrice' AS metric, 'XIT001' AS source");
+    expect(sources).toContain("DATE_SUB(quarter, INTERVAL 9 MONTH)");
+    expect(sources).toContain("'vacancyRate', 'housing_survey'");
+    expect(sources).toContain("'population', 'resident_register'");
+    expect(sources).toContain("'stations', 'XPT001'");
   });
 
   it("only counts detached houses (land and building)", () => {

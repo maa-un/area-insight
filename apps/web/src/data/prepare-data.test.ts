@@ -10,6 +10,48 @@ import { centersOf, convert, fullNames, latestRows } from "../../scripts/prepare
 
 // BigQuery の JSON 書き出しの形（INT64 は文字列）を模した行。
 const exportRows = {
+  data_sources: [
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "tradePrice",
+      source: "XIT001",
+      period_from: "2025-04-01",
+      period_to: "2026-03-31",
+      as_of: null,
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "vacancyRate",
+      source: "housing_survey",
+      period_from: null,
+      period_to: null,
+      as_of: "2023-10-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "monthlyRent",
+      source: "housing_survey",
+      period_from: null,
+      period_to: null,
+      as_of: "2023-10-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "population",
+      source: "resident_register",
+      period_from: null,
+      period_to: null,
+      as_of: "2024-01-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "stations",
+      source: "XPT001",
+      period_from: "2025-04-01",
+      period_to: "2026-03-31",
+      as_of: null,
+    },
+  ],
   area_metrics: [
     {
       export_id: "2026-10-01T00:00:00.000Z",
@@ -167,7 +209,17 @@ describe("prepare-data", () => {
     const data = convert(exportRows);
     const metrics = AreaMetricsFile.parse(data.metrics);
     expect(metrics.sample).toBe(false);
-    expect(metrics.asOf).toBe("2026-06-30");
+    expect(metrics.updatedAt).toBe("2026-10-16");
+    expect(metrics.sources.tradePrice).toEqual({
+      source: "XIT001",
+      period: { from: "2025-04-01", to: "2026-03-31" },
+      asOf: null,
+    });
+    expect(metrics.sources.vacancyRate).toEqual({
+      source: "housing_survey",
+      period: null,
+      asOf: "2023-10-01",
+    });
     expect(metrics.areas[0]).toMatchObject({
       population: 234111,
       tradeCount: 35,

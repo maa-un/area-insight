@@ -15,6 +15,7 @@ import {
   isTradeMetric,
   METRICS,
   type MetricKey,
+  metricPeriod,
   rankableAreas,
   sortAreas,
 } from "@/data";
@@ -148,6 +149,9 @@ export function RankingsPage() {
                     onClick={() => replaceSearchParams({ metric: key, order: undefined })}
                   >
                     {METRICS[key].label}
+                    <span className="block text-[11px] font-normal text-muted-foreground">
+                      {metricPeriod(key)}
+                    </span>
                   </button>
                 </th>
               ))}

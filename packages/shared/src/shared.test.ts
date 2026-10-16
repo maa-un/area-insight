@@ -61,8 +61,21 @@ describe("prefectureName", () => {
 
 describe("AreaMetricsFile", () => {
   it("accepts a file with nullable metrics", () => {
+    const period = {
+      source: "XIT001",
+      period: { from: "2025-10-01", to: "2026-09-30" },
+      asOf: null,
+    };
+    const survey = { source: "housing_survey", period: null, asOf: "2023-10-01" };
     const file = {
-      asOf: "2026-09-30",
+      updatedAt: "2026-10-16",
+      sources: {
+        tradePrice: period,
+        vacancyRate: survey,
+        monthlyRent: survey,
+        population: { source: "resident_register", period: null, asOf: "2026-01-01" },
+        stations: { ...period, source: "XPT001" },
+      },
       sample: true,
       areas: [
         {
