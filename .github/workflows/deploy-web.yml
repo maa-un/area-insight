@@ -69,10 +69,13 @@ jobs:
 
       # 先にハッシュ付きの assets を置いてから HTML を差し替え、配信中の HTML が
       # まだ無い assets を参照する時間を作らない。古い assets はキャッシュ中の HTML のために残す。
+      # 地図の境界（json、3.0MB）は gzip して置く（0.7MB）。gzip を受け付けない相手には GCS が展開して返す。
+      # rsync は gzip の指定（--gzip-local）に対応していないため cp を使う。assets はハッシュ付きで
+      # 中身が変わらないので、毎回すべて置き直しても結果は同じ。
       - name: Upload assets
         run: |
-          gcloud storage rsync apps/web/dist/assets "gs://${SITE_BUCKET}/assets" \
-            --recursive \
+          gcloud storage cp --recursive apps/web/dist/assets/* "gs://${SITE_BUCKET}/assets/" \
+            --gzip-local=json \
             --cache-control="public, max-age=31536000, immutable"
 
       - name: Upload pages
