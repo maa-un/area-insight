@@ -6,7 +6,7 @@ import {
 } from "@area-insight/shared";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error ビルド前に動かす Node のスクリプト（型定義なし）
-import { convert, latestRows } from "../../scripts/prepare-data.mjs";
+import { centersOf, convert, latestRows } from "../../scripts/prepare-data.mjs";
 
 // BigQuery の JSON 書き出しの形（INT64 は文字列）を模した行。
 const exportRows = {
@@ -117,5 +117,23 @@ describe("prepare-data", () => {
     expect(AreaDetail.parse(data.details[0]).recentTransactions[0]?.buildingYear).toBe(1998);
     expect(LandPricePoints.parse(data.landPrices)[0]?.price).toBe(75200);
     expect(StationMetricsList.parse(data.stations)[0]?.medianPrice).toBe(2000);
+  });
+
+  it("uses the boundary centers, keeping the job's center only for areas without a boundary", () => {
+    const centers = centersOf({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { code: "20450", center: [137.6, 35.9] },
+          geometry: { type: "MultiPolygon", coordinates: [] },
+        },
+      ],
+    });
+    const { areas } = AreaMetricsFile.parse(convert(exportRows, centers).metrics);
+    expect(areas.map((a) => a.center)).toEqual([
+      [137.97, 36.23],
+      [137.6, 35.9],
+    ]);
   });
 });

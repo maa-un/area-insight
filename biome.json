@@ -1,7 +1,13 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
   "files": {
-    "includes": ["**", "!**/dist", "!**/dist-ssr", "!**/node_modules"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/dist-ssr",
+      "!**/node_modules",
+      "!apps/web/src/data/boundaries.json"
+    ]
   },
   "formatter": {
     "indentStyle": "space",

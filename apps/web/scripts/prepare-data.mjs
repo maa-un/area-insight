@@ -3,6 +3,8 @@
 // ディレクトリには exports/<テーブル名>/*.json の形で置く（gcloud storage cp -r で取ったまま）。
 // 書き出しが無ければ何もしない。そのとき画面はサンプルデータでビルドされる。
 // 形の検証は画面のビルド時に zod で行う（src/data/index.ts）。
+// 市区町村の代表点は、同梱した境界（src/data/boundaries.json）の center で置き換える。
+// 境界に無い市区町村だけ、集計ジョブの代表点（地価の地点などの平均位置）を残す。
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,7 +21,15 @@ export function latestRows(rows) {
   return rows.filter((row) => row.export_id === latest);
 }
 
-export function convert({ area_metrics, area_details, land_price_points, station_metrics }) {
+// 境界の GeoJSON から、市区町村コード → 代表点 [経度, 緯度]
+export function centersOf(boundaries) {
+  return new Map(boundaries.features.map((f) => [f.properties.code, f.properties.center]));
+}
+
+export function convert(
+  { area_metrics, area_details, land_price_points, station_metrics },
+  centers = new Map(),
+) {
   const metrics = latestRows(area_metrics);
   const asOf = metrics.map((row) => row.as_of).find(Boolean);
   return {
@@ -37,7 +47,7 @@ export function convert({ area_metrics, area_details, land_price_points, station
         populationChangeRate: num(row.population_change_rate),
         grossYield: num(row.gross_yield),
         monthlyRent: num(row.monthly_rent),
-        center: lngLat(row.center_lng ?? null, row.center_lat ?? null),
+        center: centers.get(row.code) ?? lngLat(row.center_lng ?? null, row.center_lat ?? null),
       })),
     },
     details: latestRows(area_details).map((row) => ({
@@ -102,7 +112,10 @@ async function main(dir) {
     console.log("no exports found; building with sample data");
     return;
   }
-  const data = convert(tables);
+  const boundaries = JSON.parse(
+    await readFile(new URL("../src/data/boundaries.json", import.meta.url), "utf8"),
+  );
+  const data = convert(tables, centersOf(boundaries));
   const out = fileURLToPath(new URL("../src/data/generated/", import.meta.url));
   await rm(out, { recursive: true, force: true });
   await mkdir(join(out, "details"), { recursive: true });

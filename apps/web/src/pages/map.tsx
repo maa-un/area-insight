@@ -28,7 +28,7 @@ import { areaPath } from "@/routes";
 const AREA_METRICS = Object.keys(METRICS).filter((k) => k !== "population") as MetricKey[];
 
 const LAYERS: { id: LayerId; label: string; swatch: string }[] = [
-  { id: "areas", label: "市区町村の色分け", swatch: SCALE_COLORS[3] },
+  { id: "areas", label: "市区町村の塗り分け", swatch: SCALE_COLORS[3] },
   { id: "land", label: "地価公示・地価調査の地点", swatch: SCALE_COLORS[1] },
   { id: "stations", label: "駅ごとの取引相場", swatch: "#f97316" },
 ];
@@ -47,6 +47,7 @@ export function MapPage() {
   });
   const [selection, setSelection] = useState<Selection | null>(null);
   const [ready, setReady] = useState(false);
+  const [areasStatus, setAreasStatus] = useState<"loading" | "loaded" | "failed">("loading");
   const container = useRef<HTMLDivElement>(null);
   const controller = useRef<MapController | null>(null);
 
@@ -69,14 +70,18 @@ export function MapPage() {
         return;
       }
       controller.current = map;
-      map.setData(
+      map.areasLoaded.then(
+        () => !cancelled && setAreasStatus("loaded"),
+        () => !cancelled && setAreasStatus("failed"),
+      );
+      map.setPoints(
         "land",
         landPrices.map((p) => ({
           coordinates: p.coordinates,
           properties: { ...p, coordinates: null, color: landScale.colorOf(p.price) },
         })),
       );
-      map.setData(
+      map.setPoints(
         "stations",
         stations.map((s) => ({
           coordinates: s.coordinates,
@@ -95,20 +100,18 @@ export function MapPage() {
 
   useEffect(() => {
     if (!ready) return;
-    controller.current?.setData(
-      "areas",
-      dataset.areas.flatMap((a) =>
-        a.center
-          ? [
-              {
-                coordinates: a.center,
-                properties: { code: a.code, name: a.name, color: scale.colorOf(a[metric]) },
-              },
-            ]
-          : [],
-      ),
+    controller.current?.setAreaColors(
+      new Map(dataset.areas.map((a) => [a.code, scale.colorOf(a[metric])])),
     );
   }, [ready, metric, scale]);
+
+  // 押した市区町村の境界を強調する
+  useEffect(() => {
+    if (!ready) return;
+    controller.current?.selectArea(
+      selection?.layer === "areas" ? String(selection.properties.code) : null,
+    );
+  }, [ready, selection]);
 
   useEffect(() => {
     if (!ready) return;
@@ -156,7 +159,10 @@ export function MapPage() {
                 onChange={(e) => setVisible((v) => ({ ...v, [layer.id]: e.target.checked }))}
               />
               <span
-                className="inline-block size-3 rounded-full"
+                className={cn(
+                  "inline-block size-3",
+                  layer.id === "areas" ? "rounded-sm" : "rounded-full",
+                )}
                 style={{ background: layer.swatch }}
               />
               {layer.label}
@@ -174,6 +180,21 @@ export function MapPage() {
             <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
             地図を読み込んでいます
           </div>
+        )}
+        {ready && areasStatus !== "loaded" && visible.areas && (
+          <p
+            className="absolute top-3 left-3 flex items-center rounded-md bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow"
+            role="status"
+          >
+            {areasStatus === "loading" ? (
+              <>
+                <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
+                市区町村の境界を読み込んでいます
+              </>
+            ) : (
+              "市区町村の境界を読み込めませんでした。再読み込みしてください"
+            )}
+          </p>
         )}
       </div>
     </div>
@@ -199,10 +220,7 @@ function Legend({ title, labels }: { title: string; labels: string[] }) {
         ))}
       </div>
       <span className="flex items-center gap-1.5 text-muted-foreground">
-        <span
-          className="inline-block size-2.5 rounded-full"
-          style={{ background: NO_DATA_COLOR }}
-        />
+        <span className="inline-block size-2.5 rounded-sm" style={{ background: NO_DATA_COLOR }} />
         データなし
       </span>
     </div>
