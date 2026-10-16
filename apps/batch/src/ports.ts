@@ -47,7 +47,7 @@ export interface PublicDataSource {
   transactions(prefectureCode: string, quarter: Quarter): Promise<TransactionRecord[]>;
   // XPT002: 地価公示（priceClassification 0）または地価調査（1）の、指定年の地点
   landPrices(tile: Tile, year: number, classification: "0" | "1"): Promise<PointRecord[]>;
-  // XPT001: 最寄り駅の位置に置かれた「土地と建物」の取引
+  // XPT001: 最寄り駅の位置に置かれた「土地」と「土地と建物」の取引
   stationTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]>;
   // XKT015: 駅の位置・駅名・路線名（駅別乗降客数）
   stations(tile: Tile): Promise<StationRecord[]>;

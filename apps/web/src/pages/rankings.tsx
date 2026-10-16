@@ -1,4 +1,5 @@
 import {
+  DISTORTION_THRESHOLD,
   MAX_FILTERS,
   PREFECTURE_CODES,
   prefectureName,
@@ -10,8 +11,12 @@ import { Bar } from "@/components/brand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  BASIC_METRICS,
+  DISTORTION_METRICS,
   dataset,
+  isDistortionMetric,
   isMetricKey,
+  isReferenceValue,
   isTradeMetric,
   METRICS,
   type MetricKey,
@@ -26,7 +31,6 @@ import { saveFilters, toggleCompare, useUserData } from "@/lib/user-data";
 import { cn } from "@/lib/utils";
 import { areaPath } from "@/routes";
 
-const COLUMNS = Object.keys(METRICS) as MetricKey[];
 // サンプルでは市区町村が少ないため、データのある都道府県だけを選択肢に出す。
 const PREFECTURES = PREFECTURE_CODES.filter((code) =>
   dataset.areas.some((area) => area.prefectureCode === code),
@@ -69,6 +73,8 @@ export function RankingsPage() {
   const ranked = rankableAreas(inPrefecture, metric, includeReference);
   const hidden = inPrefecture.length - ranked.length;
   const rows = sortAreas(ranked, metric, order);
+  // 表の列は基本の指標。歪みの指標を選んだときは、その列を先頭に足す
+  const columns = isDistortionMetric(metric) ? [metric, ...BASIC_METRICS] : BASIC_METRICS;
   const max = Math.max(...rows.map((a) => Math.abs(a[metric] ?? 0)), 0);
 
   return (
@@ -85,11 +91,20 @@ export function RankingsPage() {
             value={metric}
             onChange={(e) => replaceSearchParams({ metric: e.target.value, order: undefined })}
           >
-            {COLUMNS.map((key) => (
-              <option key={key} value={key}>
-                {METRICS[key].label}
-              </option>
-            ))}
+            <optgroup label="指標">
+              {BASIC_METRICS.map((key) => (
+                <option key={key} value={key}>
+                  {METRICS[key].label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="市場の歪み">
+              {DISTORTION_METRICS.map((key) => (
+                <option key={key} value={key}>
+                  {METRICS[key].label}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </Field>
         <Field label="都道府県">
@@ -116,6 +131,15 @@ export function RankingsPage() {
         <SavedFilters current={conditions} />
       </div>
 
+      {isDistortionMetric(metric) && (
+        <p className="text-sm text-muted-foreground">
+          {metric === "landToOfficialRatio"
+            ? "土地の取引単価の中央値 ÷ 住宅地の地価（公示地価・基準地価）の中央値。1 倍を下回るほど、公的な評価より安く取引されています。"
+            : `需要の指標と価格の指標の、都道府県内での順位の差（-100〜+100pt）。+${DISTORTION_THRESHOLD}pt 以上を「歪みあり」としています。`}{" "}
+          取引の少ない市区町村と、「利回りは高いが人口が減り空き家も多い」市区町村は載せていません。投資判断の助言ではありません。
+        </p>
+      )}
+
       {isTradeMetric(metric) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <label className="flex items-center gap-2">
@@ -141,7 +165,7 @@ export function RankingsPage() {
             <tr>
               <th className="w-12 px-3 py-2.5 font-medium">順位</th>
               <th className="px-3 py-2.5 font-medium">市区町村</th>
-              {COLUMNS.map((key) => (
+              {columns.map((key) => (
                 <th key={key} className="px-3 py-2.5 text-right font-medium">
                   <button
                     type="button"
@@ -179,13 +203,16 @@ export function RankingsPage() {
                     {prefectureName(area.prefectureCode)}
                   </span>
                 </td>
-                {COLUMNS.map((key) => (
+                {columns.map((key) => (
                   <td
                     key={key}
-                    className={cn("px-3 py-2.5 text-right", key === metric && "font-bold")}
+                    className={cn(
+                      "px-3 py-2.5 text-right whitespace-nowrap",
+                      key === metric && "font-bold",
+                    )}
                   >
                     {formatMetric(key, area[key])}
-                    {key === "tradePrice" && area.tradeCount < RELIABLE_TRADE_COUNT && (
+                    {isTradeMetric(key) && area[key] !== null && isReferenceValue(area, key) && (
                       <Badge variant="outline" className="ml-1.5">
                         参考値
                       </Badge>

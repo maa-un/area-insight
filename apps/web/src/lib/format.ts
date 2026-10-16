@@ -26,6 +26,25 @@ export function formatYenPerTsubo(valuePerSqm: number | null): string {
   return valuePerSqm === null ? NO_DATA : `${integer.format(valuePerSqm * SQM_PER_TSUBO)}円/坪`;
 }
 
+// 坪単価（万円/坪、小数 1 桁）。㎡単価から換算する。
+export function formatManYenPerTsubo(valuePerSqm: number | null): string {
+  return valuePerSqm === null
+    ? NO_DATA
+    : `${decimal.format((valuePerSqm * SQM_PER_TSUBO) / 10000)}万円/坪`;
+}
+
+// 坪単価の幅（「45.2〜58.1万円/坪」）。
+export function formatTsuboRange(lowPerSqm: number, highPerSqm: number): string {
+  const tsubo = (v: number) => decimal.format((v * SQM_PER_TSUBO) / 10000);
+  return `${tsubo(lowPerSqm)}〜${tsubo(highPerSqm)}万円/坪`;
+}
+
+// 歪みの順位の差（-100〜100）。「+42pt」
+export function formatGap(value: number | null): string {
+  if (value === null) return NO_DATA;
+  return `${value > 0 ? "+" : ""}${integer.format(value)}pt`;
+}
+
 // 倍率。「0.85倍」のように小数 2 桁で出す。
 const ratio = new Intl.NumberFormat("ja-JP", {
   minimumFractionDigits: 2,
@@ -73,6 +92,14 @@ export function formatMetric(key: string, value: number | null): string {
       return formatCount(value, "人");
     case "populationChangeRate":
       return formatPercent(value, { signed: true });
+    case "landUnitPrice":
+      return formatManYenPerTsubo(value);
+    case "landToOfficialRatio":
+      return formatRatio(value);
+    case "rentGap":
+    case "landGap":
+    case "momentumGap":
+      return formatGap(value);
     default:
       return formatPercent(value);
   }

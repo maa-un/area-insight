@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatDataPeriod, formatPopulationChange, yearsApart } from "./period";
+import {
+  formatDataPeriod,
+  formatLandPriceAsOf,
+  formatPopulationChange,
+  yearsApart,
+} from "./period";
 
 const trade = {
   source: "XIT001",
@@ -24,5 +29,27 @@ describe("period", () => {
   it("measures how far apart two data points are", () => {
     expect(yearsApart(trade, survey)).toBeCloseTo(2.5, 1);
     expect(yearsApart(trade, trade)).toBe(0);
+  });
+});
+
+describe("formatLandPriceAsOf", () => {
+  const official = { source: "official_land_price", period: null, asOf: "2026-01-01" } as const;
+  const prefecture = { source: "prefecture_land_price", period: null, asOf: "2025-07-01" } as const;
+  it("lists both land price dates and skips missing ones", () => {
+    expect(
+      formatLandPriceAsOf({ officialLandPrice: official, prefectureLandPrice: prefecture }),
+    ).toBe("公示地価 2026年1月1日時点・基準地価 2025年7月1日時点");
+    expect(
+      formatLandPriceAsOf({
+        officialLandPrice: official,
+        prefectureLandPrice: { ...prefecture, asOf: null },
+      }),
+    ).toBe("公示地価 2026年1月1日時点");
+    expect(
+      formatLandPriceAsOf({
+        officialLandPrice: { ...official, asOf: null },
+        prefectureLandPrice: { ...prefecture, asOf: null },
+      }),
+    ).toBe("地価 時点不明");
   });
 });

@@ -14,6 +14,11 @@ export const QuarterLabel = z.string().regex(/^\d{4}Q[1-4]$/);
 // 取引件数がこれ未満の値は「参考値」として表示する（仕様書の推奨値。実データの分布を見て確定する）。
 export const RELIABLE_TRADE_COUNT = 10;
 
+// 市場の歪みの値（順位の差、-100〜100）。
+export const DistortionGap = z.number().min(-100).max(100);
+// 「歪みあり」とする順位の差（仕様書の推奨値。実データの分布を見て確定する）。
+export const DISTORTION_THRESHOLD = 40;
+
 // 市区町村の指標一覧（全国 1 ファイル）の 1 行。値が無い指標は null。
 export const AreaMetrics = z.object({
   code: MunicipalityCode,
@@ -31,6 +36,29 @@ export const AreaMetrics = z.object({
   grossYield: z.number().nonnegative().nullable(),
   // 家賃相場（円/月）。PropFolio へ渡す
   monthlyRent: z.number().int().nonnegative().nullable(),
+  // 民営借家の 1㎡あたり家賃（円/月）。家賃相場の元で、歪みの比較に使う
+  rentPerSqm: z.number().nonnegative().nullable(),
+  // 土地（宅地(土地)）の取引単価の中央値（円/㎡）と件数。期間は直近 8 四半期
+  landUnitPrice: z.number().nonnegative().nullable(),
+  landTradeCount: z.number().int().nonnegative(),
+  // 土地の取引単価の前年比（%）。直近 4 四半期と、その前の 4 四半期の中央値を比べる。どちらかの件数が少なければ null
+  landPriceChangeRate: z.number().nullable(),
+  // 住宅地の地価（公示地価・基準地価の最新年の地点の中央値、円/㎡）と前年比（%、地点の前年比の中央値）
+  officialLandPrice: z.number().nonnegative().nullable(),
+  officialLandPriceChangeRate: z.number().nullable(),
+  // 土地の取引単価 ÷ 住宅地の地価。1 を下回るほど公的な評価より安く取引されている。土地の取引が少なければ null
+  landToOfficialRatio: z.number().nonnegative().nullable(),
+  // 市場の歪み（同じ都道府県の市区町村の中での「需要の指標の順位 − 価格の指標の順位」、-100〜100）。
+  // 正の値が大きいほど、需要の割に価格が低い。仕様書「市場の歪み指標」
+  //   rentGap: 人口の 5 年増減率 と 1㎡あたり家賃
+  //   landGap: 人口の 5 年増減率 と 土地の取引単価
+  //   momentumGap: 住宅地の地価の前年比 と 土地の取引単価の前年比
+  rentGap: DistortionGap.nullable(),
+  landGap: DistortionGap.nullable(),
+  momentumGap: DistortionGap.nullable(),
+  // 「利回りは高いが需要が弱い」（都道府県内で利回りが上位 2 割・人口が減少・空き家率が上位 2 割）。
+  // 歪みではなく、需要の弱さが価格に出ているだけとみなす
+  weakDemand: z.boolean(),
   // 市区町村を指す位置（代表点）。境界の最大の面の重心。位置の分かるデータが無い市区町村は null
   center: LngLat.nullable(),
 });
@@ -40,7 +68,15 @@ export type AreaMetrics = z.infer<typeof AreaMetrics>;
 //   XIT001: 不動産取引価格情報（市区町村の取引）  XPT001: 同（地点。駅ごとの取引相場）
 //   housing_survey: 住宅・土地統計調査（空き家率・家賃。5 年ごと、10 月 1 日時点）
 //   resident_register: 住民基本台帳人口（1 月 1 日時点）
-export const DataSourceKey = z.enum(["XIT001", "XPT001", "housing_survey", "resident_register"]);
+//   official_land_price: 地価公示（1 月 1 日時点）  prefecture_land_price: 都道府県地価調査（基準地価、7 月 1 日時点）
+export const DataSourceKey = z.enum([
+  "XIT001",
+  "XPT001",
+  "housing_survey",
+  "resident_register",
+  "official_land_price",
+  "prefecture_land_price",
+]);
 export type DataSourceKey = z.infer<typeof DataSourceKey>;
 
 // 期間のデータは period（取引なら始まりと終わりの四半期の初日・末日）、時点のデータは asOf を持つ。
@@ -57,7 +93,11 @@ export const DataSources = z.object({
   vacancyRate: DataPeriod,
   monthlyRent: DataPeriod, // 家賃の ㎡単価の時点。延床面積は tradePrice の期間の取引から
   population: DataPeriod, // 人口と 5 年増減率の「最新年」
-  stations: DataPeriod, // 駅ごとの取引相場
+  stations: DataPeriod, // 駅ごとの取引相場（直近 4 四半期）
+  landTrade: DataPeriod, // 土地の取引単価（直近 8 四半期）。地区ごとの分布、取引 ÷ 公示地価、歪み
+  officialLandPrice: DataPeriod, // 地価公示の最新年。取り込む前は asOf が null
+  prefectureLandPrice: DataPeriod, // 地価調査の最新年。取り込む前は asOf が null
+  stationLandTrade: DataPeriod, // 駅ごとの土地の坪単価（直近 8 四半期）
 });
 export type DataSources = z.infer<typeof DataSources>;
 
@@ -101,6 +141,27 @@ export const OfficialLandPrices = z.object({
 });
 export type OfficialLandPrices = z.infer<typeof OfficialLandPrices>;
 
+// 駅ごとの土地の坪単価の目安（仕様書「駅ごとの妥当な土地の坪単価」）。
+// XPT001 の土地（宅地(土地)）の取引の㎡単価を、住宅地の地価の前年比で adjustedTo の時点に補正し、
+// 25%・50%・75% 点を出す。25%〜75% を「妥当な範囲」とする。XPT001 は駅からの距離を返さないため、
+// 距離別には、同じ駅が最寄りの公示地価・基準地価（住宅地）の中央値を並べる。
+export const StationLandPrice = z.object({
+  stationName: z.string(),
+  lineNames: z.array(z.string()),
+  coordinates: LngLat,
+  // 取引された土地のある市区町村（市区町村ページでの絞り込みに使う）
+  cityCodes: z.array(MunicipalityCode),
+  count: z.number().int().positive(),
+  low: z.number().nonnegative(), // 25% 点（円/㎡）
+  median: z.number().nonnegative(), // 50% 点（円/㎡）
+  high: z.number().nonnegative(), // 75% 点（円/㎡）
+  periodFrom: QuarterLabel,
+  periodTo: QuarterLabel,
+  adjustedTo: z.iso.date().nullable(), // 補正先の時点。地価が無く補正していなければ null
+  officialByStationDistance: z.array(LandPriceMedian.extend({ band: StationDistanceBand })),
+});
+export type StationLandPrice = z.infer<typeof StationLandPrice>;
+
 // 市区町村の詳細（市区町村ごとのファイル）。
 export const AreaDetail = z.object({
   code: MunicipalityCode,
@@ -132,6 +193,8 @@ export const AreaDetail = z.object({
     districts: z.array(LandPriceStats.extend({ district: z.string() })),
   }),
   officialLandPrices: OfficialLandPrices,
+  // この市区町村で取引された土地の、最寄り駅ごとの坪単価の目安（取引の多い順）
+  stationLandPrices: z.array(StationLandPrice),
   // 直近の取引（新しい順）
   recentTransactions: z.array(
     z.object({
@@ -146,9 +209,15 @@ export const AreaDetail = z.object({
 });
 export type AreaDetail = z.infer<typeof AreaDetail>;
 
-// 地価公示・地価調査の地点（XPT002）。都道府県ごとのファイル。
+// 地価公示・地価調査の地点（XPT002）。種類ごとに最新の年の地点。都道府県ごとのファイル。
+// 地価の種類。地価公示（1 月 1 日時点）と都道府県地価調査（基準地価、7 月 1 日時点）は時点が半年ずれるため分けて示す。
+export const LandPriceKind = z.enum(["official", "prefecture"]);
+export type LandPriceKind = z.infer<typeof LandPriceKind>;
+
 export const LandPricePoint = z.object({
   pointId: z.string().min(1),
+  kind: LandPriceKind,
+  asOf: z.iso.date(), // 価格の時点
   coordinates: LngLat,
   price: z.number().nonnegative(), // 円/㎡
   changeRate: z.number().nullable(), // 前年比（%）

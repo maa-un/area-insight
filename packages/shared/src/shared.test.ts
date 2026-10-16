@@ -3,6 +3,7 @@ import {
   AreaDetail,
   AreaMetricsFile,
   CompareList,
+  DistortionGap,
   LandPriceStats,
   MunicipalityCode,
   PREFECTURE_CODES,
@@ -75,6 +76,10 @@ describe("AreaMetricsFile", () => {
         monthlyRent: survey,
         population: { source: "resident_register", period: null, asOf: "2026-01-01" },
         stations: { ...period, source: "XPT001" },
+        landTrade: period,
+        officialLandPrice: { source: "official_land_price", period: null, asOf: "2026-01-01" },
+        prefectureLandPrice: { source: "prefecture_land_price", period: null, asOf: null },
+        stationLandTrade: { ...period, source: "XPT001" },
       },
       sample: true,
       areas: [
@@ -89,11 +94,27 @@ describe("AreaMetricsFile", () => {
           populationChangeRate: 2.1,
           grossYield: null,
           monthlyRent: null,
+          rentPerSqm: null,
+          landUnitPrice: null,
+          landTradeCount: 0,
+          landPriceChangeRate: null,
+          officialLandPrice: 1200000,
+          officialLandPriceChangeRate: 3.4,
+          landToOfficialRatio: null,
+          rentGap: 35,
+          landGap: null,
+          momentumGap: null,
+          weakDemand: false,
           center: [139.75, 35.69],
         },
       ],
     };
     expect(AreaMetricsFile.parse(file)).toEqual(file);
+  });
+
+  it("rejects a distortion gap outside -100 to 100", () => {
+    expect(DistortionGap.safeParse(120).success).toBe(false);
+    expect(DistortionGap.safeParse(-100).success).toBe(true);
   });
 
   it("rejects a quarter label in the wrong form", () => {

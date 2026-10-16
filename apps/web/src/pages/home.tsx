@@ -39,6 +39,7 @@ const highlights: { key: MetricKey; order: "asc" | "desc"; title: string }[] = [
   { key: "grossYield", order: "desc", title: "想定利回りが高い" },
   { key: "tradePrice", order: "asc", title: "取引価格が手ごろ" },
   { key: "populationChangeRate", order: "desc", title: "人口が増えている" },
+  { key: "rentGap", order: "desc", title: "人口の割に家賃が低い" },
 ];
 
 export function HomePage() {
@@ -86,7 +87,7 @@ export function HomePage() {
             すべて見る
           </a>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {highlights.map(({ key, order, title }) => (
             <Card key={key}>
               <CardHeader>

@@ -13,6 +13,17 @@ const base: AreaMetrics = {
   populationChangeRate: -1.9,
   grossYield: 6.7,
   monthlyRent: 140000,
+  rentPerSqm: null,
+  landUnitPrice: null,
+  landTradeCount: 0,
+  landPriceChangeRate: null,
+  officialLandPrice: null,
+  officialLandPriceChangeRate: null,
+  landToOfficialRatio: null,
+  rentGap: null,
+  landGap: null,
+  momentumGap: null,
+  weakDemand: false,
   center: null,
 };
 

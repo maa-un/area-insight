@@ -1,4 +1,4 @@
-import type { DataPeriod } from "@area-insight/shared";
+import type { DataPeriod, DataSources } from "@area-insight/shared";
 import { formatDate } from "@/lib/format";
 
 // 指標の時点の表示（仕様書「時点の表示ルール」）。
@@ -34,4 +34,17 @@ export function yearsApart(a: DataPeriod, b: DataPeriod): number {
   const end = (data: DataPeriod) => Date.parse(data.period?.to ?? data.asOf ?? "");
   const diff = Math.abs(end(a) - end(b));
   return Number.isNaN(diff) ? 0 : diff / (365.25 * 24 * 60 * 60 * 1000);
+}
+
+// 住宅地の地価の時点。市区町村・駅の中央値は地価公示と地価調査（基準地価）の両方の地点を使うため、両方を並べる。
+// 例: 「公示地価 2026年1月1日時点・基準地価 2025年7月1日時点」
+export function formatLandPriceAsOf({
+  officialLandPrice,
+  prefectureLandPrice,
+}: Pick<DataSources, "officialLandPrice" | "prefectureLandPrice">): string {
+  const parts = [
+    officialLandPrice.asOf && `公示地価 ${formatDate(officialLandPrice.asOf)}時点`,
+    prefectureLandPrice.asOf && `基準地価 ${formatDate(prefectureLandPrice.asOf)}時点`,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join("・") : "地価 時点不明";
 }

@@ -3,6 +3,8 @@ import { ArrowUpRight, ChevronRight, Map as MapIcon } from "lucide-react";
 import { AreaActions } from "@/components/area-actions";
 import { Chip, Eyebrow, PositionBar } from "@/components/brand";
 import { LandPriceSection } from "@/components/land-prices";
+import { MarketDistortionSection } from "@/components/market-distortion";
+import { StationLandPriceSection } from "@/components/station-land-prices";
 import { TrendChart, yearName } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -125,6 +127,10 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         official={detail.officialLandPrices}
       />
 
+      <StationLandPriceSection areaName={area.name} stations={detail.stationLandPrices} />
+
+      <MarketDistortionSection area={area} prefecture={prefecture} />
+
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -169,6 +175,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
                 {formatCount(area.population, "人")}（5 年で{" "}
                 {formatPercent(area.populationChangeRate, { signed: true })}）
               </CardDescription>
+              <p className="text-xs text-muted-foreground">{metricPeriod("population")}</p>
             </CardHeader>
             <CardContent>
               <table className="w-full text-sm">
