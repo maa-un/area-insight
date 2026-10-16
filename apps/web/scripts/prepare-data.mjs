@@ -58,6 +58,22 @@ export function landPricesByCode(rows) {
 
 const NO_LAND_PRICES = { periodFrom: null, periodTo: null, total: null, districts: [] };
 
+// 住宅地の地価（市区町村の中央値と、駅からの距離別）。地点が無ければ null と空の配列。
+export function officialLandPricesOf(row) {
+  const residential = row.official_land_price ?? null;
+  return {
+    residential:
+      residential === null || residential.price === null || residential.price === undefined
+        ? null
+        : { price: num(residential.price), count: num(residential.count) },
+    byStationDistance: (row.land_prices_by_station_distance ?? []).map((b) => ({
+      band: b.band,
+      price: num(b.price),
+      count: num(b.count),
+    })),
+  };
+}
+
 export function convert(
   { area_metrics, area_details, district_land_prices = [], land_price_points, station_metrics },
   centers = new Map(),
@@ -86,6 +102,7 @@ export function convert(
     details: latestRows(area_details).map((row) => ({
       code: row.code,
       landPrices: landPrices.get(row.code) ?? NO_LAND_PRICES,
+      officialLandPrices: officialLandPricesOf(row),
       quarters: (row.quarters ?? []).map((q) => ({
         period: q.period,
         price: num(q.price),
@@ -116,6 +133,8 @@ export function convert(
       changeRate: num(row.change_rate),
       use: row.use ?? "",
       location: row.location ?? "",
+      stationName: row.station_name ?? null,
+      stationDistance: num(row.station_distance_m),
     })),
     stations: latestRows(station_metrics).map((row) => ({
       stationName: row.station_name ?? null,
