@@ -13,6 +13,7 @@ import {
 } from "@/data";
 import {
   formatCount,
+  formatDistance,
   formatManYen,
   formatMetric,
   formatPercent,
@@ -279,6 +280,12 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
           前年比{" "}
           {formatPercent(p.changeRate === null ? null : Number(p.changeRate), { signed: true })}
         </p>
+        {p.stationName ? (
+          <p className="text-muted-foreground tabular-nums">
+            {String(p.stationName)}駅
+            {p.stationDistance === null ? "" : ` まで ${formatDistance(Number(p.stationDistance))}`}
+          </p>
+        ) : null}
       </div>
     );
   }

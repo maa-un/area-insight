@@ -26,6 +26,21 @@ export function formatYenPerTsubo(valuePerSqm: number | null): string {
   return valuePerSqm === null ? NO_DATA : `${integer.format(valuePerSqm * SQM_PER_TSUBO)}円/坪`;
 }
 
+// 倍率。「0.85倍」のように小数 2 桁で出す。
+const ratio = new Intl.NumberFormat("ja-JP", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+export function formatRatio(value: number | null): string {
+  return value === null ? NO_DATA : `${ratio.format(value)}倍`;
+}
+
+// 距離（m）。1km 以上は「1.2km」、未満は「150m」。
+export function formatDistance(meters: number | null): string {
+  if (meters === null) return NO_DATA;
+  return meters >= 1000 ? `${decimal.format(meters / 1000)}km` : `${integer.format(meters)}m`;
+}
+
 export function formatPercent(value: number | null, { signed = false } = {}): string {
   if (value === null) return NO_DATA;
   const sign = signed && value > 0 ? "+" : "";

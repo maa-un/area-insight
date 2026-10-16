@@ -1,0 +1,198 @@
+name: deploy
+
+# main へのマージで、ci.yml の検査を通してから次を行う。
+# - 画面: ビルドしてサイト用バケットへ置き、Cloud CDN のキャッシュを消す
+# - バッチ・保存 API: ルートの package.json の version のタグ（vX.Y.Z）がまだ無ければ、
+#   イメージを Artifact Registry に push し、タグと GitHub Release を作る。
+#   どのタグを動かすかは maaun-terraform の tfvars で指定するため、Cloud Run は更新しない。
+# データ更新後はバッチの Workflows が repository_dispatch（data-updated）で起動し、画面だけを作り直す。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [data-updated]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.event_name != 'repository_dispatch'
+    uses: ./.github/workflows/ci.yml
+
+  web:
+    name: web
+    needs: check
+    # データ更新の通知では check を飛ばすため、skipped でも進める
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SITE_BUCKET: ${{ vars.SITE_BUCKET }}
+      DATA_BUCKET: ${{ vars.DATA_BUCKET }}
+      URL_MAP: ${{ vars.URL_MAP }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      # 集計ジョブの書き出しを取り、画面が読む形に直す。まだ書き出しが無ければサンプルデータでビルドする。
+      - name: Prepare data
+        run: |
+          mkdir -p "${RUNNER_TEMP}/area-data"
+          if [ -n "${DATA_BUCKET}" ] && gcloud storage ls "gs://${DATA_BUCKET}/exports/" >/dev/null 2>&1; then
+            gcloud storage cp -r "gs://${DATA_BUCKET}/exports" "${RUNNER_TEMP}/area-data/"
+          fi
+          node apps/web/scripts/prepare-data.mjs "${RUNNER_TEMP}/area-data"
+
+      # 末尾の ... で依存先（packages/shared）も先にビルドする。shared は dist を参照されるため。
+      - run: pnpm --filter "@area-insight/web..." build
+        env:
+          # Clerk の公開キー（pk_...）。未設定ならログイン機能を出さずにビルドする。
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
+
+      # 先にハッシュ付きの assets を置いてから HTML を差し替え、配信中の HTML が
+      # まだ無い assets を参照する時間を作らない。古い assets はキャッシュ中の HTML のために残す。
+      # 地図の境界（json、3.0MB）は gzip して置く（0.7MB）。gzip を受け付けない相手には GCS が展開して返す。
+      # rsync は gzip の指定（--gzip-local）に対応していないため cp を使う。assets はハッシュ付きで
+      # 中身が変わらないので、毎回すべて置き直しても結果は同じ。
+      - name: Upload assets
+        run: |
+          gcloud storage cp --recursive apps/web/dist/assets/* "gs://${SITE_BUCKET}/assets/" \
+            --gzip-local=json \
+            --cache-control="public, max-age=31536000, immutable"
+
+      - name: Upload pages
+        run: |
+          gcloud storage rsync apps/web/dist "gs://${SITE_BUCKET}" \
+            --recursive \
+            --exclude="^assets/" \
+            --delete-unmatched-destination-objects \
+            --cache-control="public, max-age=300"
+
+      - name: Invalidate CDN cache
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache "${URL_MAP}" \
+            --path "/*" \
+            --global \
+            --async \
+            --project "${GCP_PROJECT_ID}"
+
+  # package.json の version のタグがまだ無いときだけリリースする。版を上げない PR のマージでは何もしない。
+  version:
+    name: version
+    needs: check
+    if: github.event_name != 'repository_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: version
+        name: Check version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::package.json version must be a semantic version such as 1.2.3: ${version}"
+            exit 1
+          fi
+          tag="v${version}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null; then
+            echo "${tag} はリリース済みのため、イメージは push しない"
+            echo "release=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "release=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+  images:
+    name: image (${{ matrix.app }})
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, batch]
+    env:
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY_PREFIX }}-${{ matrix.app }}/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Authenticate Docker
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ vars.GCP_REGION }}-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      # provenance/SBOM を付けると 1 リリースが 3 バージョンになり、
+      # Artifact Registry の保持数（バージョン数で数える）を食うため付けない。
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ needs.version.outputs.tag }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=${{ matrix.app }}
+
+  # 両方のイメージを push できてからタグを付ける。途中で失敗しても、再実行すれば同じタグで置き直す。
+  release:
+    name: release
+    needs: [version, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          gh release create "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "${TAG}" \
+            --generate-notes

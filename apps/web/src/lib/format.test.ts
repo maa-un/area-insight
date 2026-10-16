@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatYenPerSqm, formatYenPerTsubo, NO_DATA } from "./format";
+import { formatDistance, formatRatio, formatYenPerSqm, formatYenPerTsubo, NO_DATA } from "./format";
 
 describe("unit prices", () => {
   it("shows the price per square metre", () => {
@@ -13,5 +13,12 @@ describe("unit prices", () => {
 
   it("shows no data for missing values", () => {
     expect(formatYenPerTsubo(null)).toBe(NO_DATA);
+  });
+
+  it("shows ratios and distances", () => {
+    expect(formatRatio(0.853)).toBe("0.85倍");
+    expect(formatRatio(null)).toBe(NO_DATA);
+    expect(formatDistance(150)).toBe("150m");
+    expect(formatDistance(1200)).toBe("1.2km");
   });
 });

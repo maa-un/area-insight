@@ -51,3 +51,16 @@ export function unitPriceOf(priceManYen: number, areaSqm: number): number | null
   if (!(priceManYen > 0) || !(areaSqm > 0)) return null;
   return Math.round((priceManYen * 10000) / areaSqm);
 }
+
+// 取引単価 ÷ 住宅地の地価（公示地価・地価調査の中央値）。1 未満なら公示地価より安く取引されている。
+export function ratioToOfficial(unitPrice: number, officialPrice: number | null): number | null {
+  if (officialPrice === null || !(officialPrice > 0) || !(unitPrice >= 0)) return null;
+  return unitPrice / officialPrice;
+}
+
+// 倍率を一言にする。±5% は「ほぼ同じ水準」とみなす。
+export function officialVerdictOf(ratio: number): Verdict {
+  if (ratio < 0.95) return { label: "公示地価より安く取引されています", tone: "low" };
+  if (ratio <= 1.05) return { label: "公示地価とほぼ同じ水準で取引されています", tone: "mid" };
+  return { label: "公示地価より高く取引されています", tone: "high" };
+}

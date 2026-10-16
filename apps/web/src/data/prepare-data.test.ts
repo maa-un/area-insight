@@ -110,18 +110,36 @@ const exportRows = {
           building_year: "1998",
         },
       ],
+      official_land_price: { price: "80000", count: "14" },
+      land_prices_by_station_distance: [
+        { band: "within10", price: "110000", count: "3" },
+        { band: "over20", price: "52000", count: "6" },
+      ],
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      code: "20450",
+      quarters: [],
+      years: [],
+      population_history: [],
+      recent_transactions: [],
+      official_land_price: null,
+      land_prices_by_station_distance: [],
     },
   ],
   land_price_points: [
     {
       export_id: "2026-10-16T00:00:00.000Z",
       point_id: "15002260",
+      code: "20202",
       longitude: 137.95,
       latitude: 36.24,
       price: "75200",
       change_rate: 0.8,
       use: "住宅地",
       location: "長野県松本市宮渕１丁目",
+      station_name: "北松本",
+      station_distance_m: "1200",
     },
   ],
   district_land_prices: [
@@ -210,7 +228,11 @@ describe("prepare-data", () => {
     expect(metrics.areas[1]?.center).toBeNull();
 
     expect(AreaDetail.parse(data.details[0]).recentTransactions[0]?.buildingYear).toBe(1998);
-    expect(LandPricePoints.parse(data.landPrices)[0]?.price).toBe(75200);
+    expect(LandPricePoints.parse(data.landPrices)[0]).toMatchObject({
+      price: 75200,
+      stationName: "北松本",
+      stationDistance: 1200,
+    });
     expect(StationMetricsList.parse(data.stations)[0]).toMatchObject({
       stationName: "松本",
       lineNames: ["大糸線", "篠ノ井線"],
@@ -234,6 +256,20 @@ describe("prepare-data", () => {
       [137.97, 36.23],
       [137.6, 35.9],
     ]);
+  });
+
+  it("attaches the official land prices and the bands by station distance", () => {
+    const data = convert(exportRows);
+    const detail = AreaDetail.parse(data.details[0]);
+    expect(detail.officialLandPrices.residential).toEqual({ price: 80000, count: 14 });
+    expect(detail.officialLandPrices.byStationDistance).toEqual([
+      { band: "within10", price: 110000, count: 3 },
+      { band: "over20", price: 52000, count: 6 },
+    ]);
+    expect(AreaDetail.parse(data.details[1]).officialLandPrices).toEqual({
+      residential: null,
+      byStationDistance: [],
+    });
   });
 
   it("attaches land price distributions to each area and falls back to empty", () => {

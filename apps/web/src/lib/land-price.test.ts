@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { medianOf, percentileOf, quartilesOf, unitPriceOf, verdictOf } from "./land-price";
+import {
+  medianOf,
+  officialVerdictOf,
+  percentileOf,
+  quartilesOf,
+  ratioToOfficial,
+  unitPriceOf,
+  verdictOf,
+} from "./land-price";
 
 // 0, 5, 10, …, 100 の 21 値（単価 1 万〜11 万円/㎡が一様に分布している地区）
 const stats = {
@@ -35,5 +43,14 @@ describe("land price distribution", () => {
     expect(unitPriceOf(1200, 200)).toBe(60000);
     expect(unitPriceOf(0, 200)).toBeNull();
     expect(unitPriceOf(1200, 0)).toBeNull();
+  });
+
+  it("compares the unit price with the official land price", () => {
+    expect(ratioToOfficial(60000, 80000)).toBe(0.75);
+    expect(ratioToOfficial(60000, null)).toBeNull();
+    expect(ratioToOfficial(60000, 0)).toBeNull();
+    expect(officialVerdictOf(0.75).label).toBe("公示地価より安く取引されています");
+    expect(officialVerdictOf(1).tone).toBe("mid");
+    expect(officialVerdictOf(1.2).tone).toBe("high");
   });
 });

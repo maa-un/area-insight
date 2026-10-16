@@ -80,6 +80,27 @@ export const LandPriceStats = z.object({
 });
 export type LandPriceStats = z.infer<typeof LandPriceStats>;
 
+// 駅からの距離の区分。徒歩 1 分 = 80m（不動産の表示規約）として、10 分以内（800m）・20 分以内（1,600m）・それ以上。
+export const STATION_DISTANCE_BANDS = ["within10", "within20", "over20"] as const;
+export const StationDistanceBand = z.enum(STATION_DISTANCE_BANDS);
+export type StationDistanceBand = z.infer<typeof StationDistanceBand>;
+export const METERS_PER_WALK_MINUTE = 80;
+
+// 地点の中央値と地点数。
+const LandPriceMedian = z.object({
+  price: z.number().nonnegative(), // 円/㎡
+  count: z.number().int().positive(),
+});
+
+// 市区町村の住宅地の地価（公示地価・地価調査の最新年の地点から）。取引単価と比べる基準。
+export const OfficialLandPrices = z.object({
+  // 住宅地の地点の中央値。住宅地の地点が無ければ null
+  residential: LandPriceMedian.nullable(),
+  // 駅からの距離別の住宅地の地価（近い順）。距離の分かる地点が無い区分は含まない
+  byStationDistance: z.array(LandPriceMedian.extend({ band: StationDistanceBand })),
+});
+export type OfficialLandPrices = z.infer<typeof OfficialLandPrices>;
+
 // 市区町村の詳細（市区町村ごとのファイル）。
 export const AreaDetail = z.object({
   code: MunicipalityCode,
@@ -110,6 +131,7 @@ export const AreaDetail = z.object({
     total: LandPriceStats.nullable(),
     districts: z.array(LandPriceStats.extend({ district: z.string() })),
   }),
+  officialLandPrices: OfficialLandPrices,
   // 直近の取引（新しい順）
   recentTransactions: z.array(
     z.object({
@@ -132,6 +154,8 @@ export const LandPricePoint = z.object({
   changeRate: z.number().nullable(), // 前年比（%）
   use: z.string(),
   location: z.string(),
+  stationName: z.string().nullable(), // 最寄り駅名
+  stationDistance: z.number().nonnegative().nullable(), // 最寄り駅までの道路距離（m）
 });
 export type LandPricePoint = z.infer<typeof LandPricePoint>;
 

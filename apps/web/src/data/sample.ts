@@ -570,7 +570,38 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     districts,
   };
 
-  return { code, quarters, years, populationHistory, landPrices, recentTransactions };
+  // 住宅地の地価（公示地価・地価調査）。取引単価よりやや高めに置き、駅に近いほど高くする。
+  const officialPrice = round(baseUnit * (0.95 + rand() * 0.3), -2);
+  const officialLandPrices = {
+    residential: { price: officialPrice, count: 6 + Math.floor(rand() * 20) },
+    byStationDistance: [
+      {
+        band: "within10" as const,
+        price: round(officialPrice * 1.3, -2),
+        count: 3 + Math.floor(rand() * 6),
+      },
+      {
+        band: "within20" as const,
+        price: round(officialPrice * 1.05, -2),
+        count: 3 + Math.floor(rand() * 6),
+      },
+      {
+        band: "over20" as const,
+        price: round(officialPrice * 0.75, -2),
+        count: 2 + Math.floor(rand() * 8),
+      },
+    ],
+  };
+
+  return {
+    code,
+    quarters,
+    years,
+    populationHistory,
+    landPrices,
+    officialLandPrices,
+    recentTransactions,
+  };
 }
 
 // 地図の地価ポイントと駅ごとの取引相場。市区町村の代表点のまわりに置く。
@@ -589,6 +620,8 @@ export const sampleLandPrices: LandPricePoint[] = SEEDS.flatMap((seed) => {
       changeRate: round(seed.trend / 2 + (rand() - 0.4) * 3, 1),
       use: commercial ? "商業地" : "住宅地",
       location: `${seed.name} サンプル地点 ${i + 1}`,
+      stationName: `${seed.name}サンプル${(i % 2) + 1}`,
+      stationDistance: round(200 + rand() * 2000, -1),
     };
   });
 });
