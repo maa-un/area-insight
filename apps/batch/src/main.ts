@@ -1,9 +1,13 @@
 import { parseArgs } from "node:util";
 import { BigQueryRawStore } from "./adapters/bigquery/bigquery-raw-store.js";
 import { BigQueryWriter } from "./adapters/bigquery/bigquery-writer.js";
+import { EStatClient } from "./adapters/estat/estat-client.js";
 import { ReinfolibClient } from "./adapters/reinfolib/reinfolib-client.js";
-import { loadConfig } from "./config.js";
+import { FileTileCatalog } from "./adapters/tiles/file-tile-catalog.js";
+import { type Config, loadConfig, requireSecret } from "./config.js";
 import { fetchMunicipalities } from "./jobs/municipalities.js";
+import { fetchLandPrices, fetchStationTransactions } from "./jobs/points.js";
+import { fetchStatistics } from "./jobs/statistics.js";
 import { fetchTransactions } from "./jobs/transactions.js";
 import { parseQuarter, recentQuarters } from "./quarters.js";
 
@@ -11,7 +15,15 @@ import { parseQuarter, recentQuarters } from "./quarters.js";
 //   municipalities                     市区町村マスタを取り直す
 //   transactions [--recent N]          直近 N 四半期（既定 4）の取引価格を取り直す
 //   transactions --quarter 2025Q2 ...  指定した四半期を取り直す（初回取り込み・再取得用）
-const USAGE = "usage: main.js municipalities | transactions [--recent N | --quarter YYYYQn ...]";
+//   land-prices [--year YYYY]          地価公示・地価調査の地点を取り直す（既定は今年）
+//   station-transactions [--recent N]  直近 N 四半期（既定 4）の駅ごとの取引を取り直す
+//   statistics                         e-Stat の統計（空き家・家賃・人口）を取り直す
+const USAGE =
+  "usage: main.js municipalities | transactions [--recent N | --quarter YYYYQn ...] | " +
+  "land-prices [--year YYYY] | station-transactions [--recent N] | statistics";
+
+// タイル一覧はイメージの tiles/ に同梱する（dist/main.js から見て ../tiles/）。
+const TILES_DIR = new URL("../tiles/", import.meta.url);
 
 async function main(argv: string[]): Promise<void> {
   const { positionals, values } = parseArgs({
@@ -20,33 +32,69 @@ async function main(argv: string[]): Promise<void> {
     options: {
       recent: { type: "string", default: "4" },
       quarter: { type: "string", multiple: true },
+      year: { type: "string" },
     },
   });
 
-  const config = loadConfig();
   // 組み立て（コンポジションルート）。取得元と保存先の実装を決めるのはここだけにする。
-  const source = new ReinfolibClient({
-    apiKey: config.REINFOLIB_API_KEY,
-    requestIntervalMs: config.REQUEST_INTERVAL_MS,
-  });
+  const config = loadConfig();
   const store = new BigQueryRawStore(
     new BigQueryWriter(config.GCP_PROJECT_ID, config.BIGQUERY_DATASET),
   );
+  const reinfolib = () =>
+    new ReinfolibClient({
+      apiKey: requireSecret(config, "REINFOLIB_API_KEY"),
+      requestIntervalMs: config.REQUEST_INTERVAL_MS,
+    });
   const now = new Date();
 
-  switch (positionals[0]) {
-    case "municipalities": {
-      const count = await fetchMunicipalities(source, store, now);
-      console.log(JSON.stringify({ job: "municipalities", rows: count }));
-      return;
-    }
+  const result = await run(positionals[0], values, { config, store, reinfolib, now });
+  console.log(JSON.stringify({ job: positionals[0], ...result }));
+}
+
+type Context = {
+  config: Config;
+  store: BigQueryRawStore;
+  reinfolib: () => ReinfolibClient;
+  now: Date;
+};
+
+async function run(
+  command: string | undefined,
+  values: { recent: string; quarter?: string[]; year?: string },
+  { config, store, reinfolib, now }: Context,
+): Promise<Record<string, unknown>> {
+  switch (command) {
+    case "municipalities":
+      return { rows: await fetchMunicipalities(reinfolib(), store, now) };
     case "transactions": {
       const quarters = values.quarter?.length
         ? values.quarter.map(parseQuarter)
         : recentQuarters(now, Number(values.recent));
-      const counts = await fetchTransactions(source, store, quarters, now);
-      console.log(JSON.stringify({ job: "transactions", rows: Object.fromEntries(counts) }));
-      return;
+      return {
+        rows: Object.fromEntries(await fetchTransactions(reinfolib(), store, quarters, now)),
+      };
+    }
+    case "land-prices": {
+      const year = values.year ? Number(values.year) : now.getUTCFullYear();
+      const tiles = new FileTileCatalog(TILES_DIR);
+      return { year, rows: await fetchLandPrices(reinfolib(), tiles, store, year, now) };
+    }
+    case "station-transactions": {
+      // recentQuarters は新しい順。最も古い四半期から最も新しい四半期までを 1 回で取る。
+      const quarters = recentQuarters(now, Number(values.recent));
+      const to = quarters[0];
+      const from = quarters.at(-1);
+      if (!to || !from) throw new Error("--recent must be at least 1");
+      const tiles = new FileTileCatalog(TILES_DIR);
+      return { rows: await fetchStationTransactions(reinfolib(), tiles, store, { from, to }, now) };
+    }
+    case "statistics": {
+      const source = new EStatClient({
+        appId: requireSecret(config, "ESTAT_APP_ID"),
+        requestIntervalMs: config.REQUEST_INTERVAL_MS,
+      });
+      return { rows: await fetchStatistics(source, store, now) };
     }
     default:
       throw new Error(USAGE);
@@ -54,6 +102,7 @@ async function main(argv: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
+  // エラーの文言には URL や鍵を含めない作りにしている（rate-limited-fetcher.ts）。
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });

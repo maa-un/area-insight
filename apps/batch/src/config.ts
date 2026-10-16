@@ -1,11 +1,13 @@
 import { z } from "zod";
 
-// 環境変数は Cloud Run Jobs（Terraform）から渡す。API キーは Secret Manager から注入される。
+// 環境変数は Cloud Run Jobs（Terraform）から渡す。API キーとアプリケーション ID は Secret Manager から注入される。
+// 使うキーはジョブごとに違うため、キーは任意にして、使うジョブで requireSecret を呼ぶ。
 const Env = z.object({
   GCP_PROJECT_ID: z.string().min(1),
   BIGQUERY_DATASET: z.string().min(1),
-  REINFOLIB_API_KEY: z.string().min(1),
-  // 不動産情報ライブラリはレート制限の数値を公開していないため、控えめな間隔で呼ぶ。
+  REINFOLIB_API_KEY: z.string().min(1).optional(),
+  ESTAT_APP_ID: z.string().min(1).optional(),
+  // 公的 API はレート制限の数値を公開していないため、控えめな間隔で呼ぶ。
   REQUEST_INTERVAL_MS: z.coerce.number().int().min(0).default(1000),
 });
 export type Config = z.infer<typeof Env>;
@@ -18,4 +20,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`invalid environment variables: ${names}`);
   }
   return parsed.data;
+}
+
+export function requireSecret(config: Config, name: "REINFOLIB_API_KEY" | "ESTAT_APP_ID"): string {
+  const value = config[name];
+  if (!value) throw new Error(`missing environment variable: ${name}`);
+  return value;
 }

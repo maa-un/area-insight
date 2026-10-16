@@ -1,6 +1,13 @@
 import { z } from "zod";
-import type { MunicipalityRecord, PublicDataSource, TransactionRecord } from "../../ports.js";
+import type {
+  MunicipalityRecord,
+  PointRecord,
+  PublicDataSource,
+  Tile,
+  TransactionRecord,
+} from "../../ports.js";
 import type { Quarter } from "../../quarters.js";
+import { type FetcherOptions, RateLimitedFetcher } from "../rate-limited-fetcher.js";
 
 // 国土交通省 不動産情報ライブラリ API のクライアント。
 // https://www.reinfolib.mlit.go.jp/help/apiManual/
@@ -44,25 +51,27 @@ const TransactionRow = z.object({
 
 const Envelope = <T extends z.ZodType>(row: T) => z.looseObject({ data: z.array(row) });
 
-export type ReinfolibClientOptions = {
-  apiKey: string;
-  requestIntervalMs: number;
-  fetch?: typeof fetch;
-  sleep?: (ms: number) => Promise<void>;
-  maxAttempts?: number;
-};
+// XPT001・XPT002 は GeoJSON の点で返る。属性は加工せずに保存するため、中身は検証しない。
+const PointCollection = z.looseObject({
+  features: z.array(
+    z.looseObject({
+      geometry: z.looseObject({
+        type: z.literal("Point"),
+        coordinates: z.tuple([z.number(), z.number()]).rest(z.number()),
+      }),
+      properties: z.record(z.string(), z.unknown()).nullable(),
+    }),
+  ),
+});
+
+export type ReinfolibClientOptions = FetcherOptions & { apiKey: string };
 
 // 取得元（PublicDataSource）の実装。
 export class ReinfolibClient implements PublicDataSource {
-  private readonly fetchFn: typeof fetch;
-  private readonly sleep: (ms: number) => Promise<void>;
-  private readonly maxAttempts: number;
-  private lastRequestAt = 0;
+  private readonly fetcher: RateLimitedFetcher;
 
   constructor(private readonly options: ReinfolibClientOptions) {
-    this.fetchFn = options.fetch ?? fetch;
-    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-    this.maxAttempts = options.maxAttempts ?? 4;
+    this.fetcher = new RateLimitedFetcher(options);
   }
 
   // XIT002: 都道府県内の市区町村一覧。
@@ -85,38 +94,47 @@ export class ReinfolibClient implements PublicDataSource {
     return body === null ? [] : Envelope(TransactionRow).parse(body).data;
   }
 
-  // データが無い期間・地域は 404 が返るため null にする。5xx と通信エラーは待って再試行する。
-  private async get(api: string, params: Record<string, string>): Promise<unknown | null> {
-    const url = `${BASE_URL}/${api}?${new URLSearchParams(params)}`;
-    for (let attempt = 1; ; attempt++) {
-      await this.throttle();
-      let response: Response;
-      try {
-        response = await this.fetchFn(url, {
-          headers: { "Ocp-Apim-Subscription-Key": this.options.apiKey },
-        });
-      } catch (error) {
-        if (attempt >= this.maxAttempts) throw error;
-        await this.sleep(backoffMs(attempt));
-        continue;
-      }
-      if (response.status === 404) return null;
-      if (response.ok) return response.json();
-      if (response.status >= 500 && attempt < this.maxAttempts) {
-        await this.sleep(backoffMs(attempt));
-        continue;
-      }
-      throw new Error(`${api} returned HTTP ${response.status}`);
-    }
+  // XPT002: 地価公示・地価調査の地点。用途は絞らず全用途を取る。
+  async landPrices(tile: Tile, year: number, classification: "0" | "1"): Promise<PointRecord[]> {
+    return this.points("XPT002", tile, {
+      year: String(year),
+      priceClassification: classification,
+    });
   }
 
-  private async throttle(): Promise<void> {
-    const wait = this.lastRequestAt + this.options.requestIntervalMs - Date.now();
-    if (wait > 0) await this.sleep(wait);
-    this.lastRequestAt = Date.now();
+  // XPT001: 「土地と建物」（landTypeCode 02）の取引価格。位置は物件の最寄り駅。
+  async stationTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]> {
+    return this.points("XPT001", tile, {
+      from: `${from.year}${from.quarter}`,
+      to: `${to.year}${to.quarter}`,
+      landTypeCode: "02",
+      priceClassification: "01",
+    });
   }
-}
 
-function backoffMs(attempt: number): number {
-  return Math.min(30_000, 1000 * 2 ** (attempt - 1));
+  // データが無いタイルは空の配列（または 404）で返る。
+  private async points(
+    api: string,
+    tile: Tile,
+    params: Record<string, string>,
+  ): Promise<PointRecord[]> {
+    const body = await this.get(api, {
+      response_format: "geojson",
+      z: String(tile.z),
+      x: String(tile.x),
+      y: String(tile.y),
+      ...params,
+    });
+    if (body === null || (Array.isArray(body) && body.length === 0)) return [];
+    return PointCollection.parse(body).features.map((feature) => ({
+      coordinates: [feature.geometry.coordinates[0], feature.geometry.coordinates[1]],
+      properties: feature.properties ?? {},
+    }));
+  }
+
+  private get(api: string, params: Record<string, string>): Promise<unknown> {
+    return this.fetcher.getJson(api, `${BASE_URL}/${api}?${new URLSearchParams(params)}`, {
+      "Ocp-Apim-Subscription-Key": this.options.apiKey,
+    });
+  }
 }
