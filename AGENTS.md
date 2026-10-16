@@ -39,7 +39,8 @@
 
 ## イメージとデプロイ
 
-- バッチと保存 API のイメージは `vX.Y.Z` タグで Artifact Registry に push する。
-  タグとルートの `package.json` の `version` は一致させる
+- `main` にマージすると `deploy.yml` が `ci.yml` を通してからデプロイする。タグを手で作らない
+- バッチと保存 API のイメージは、ルートの `package.json` の `version` が未リリースのとき
+  `vX.Y.Z` タグで Artifact Registry に push し、同じタグと GitHub Release を作る
 - 稼働させるタグは maaun-terraform の tfvars で指定する。CI から Cloud Run を直接更新しない
-- 画面は `deploy-web.yml` がサイト用バケットへ置く。ハッシュ付きの assets を先に、HTML を後に置く
+- 画面は `deploy.yml` がマージのたびにサイト用バケットへ置く。ハッシュ付きの assets を先に、HTML を後に置く
