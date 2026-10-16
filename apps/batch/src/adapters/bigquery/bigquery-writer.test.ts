@@ -29,4 +29,32 @@ describe("writeNdjson", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("writes rows from an async iterable as they arrive", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ndjson-test-"));
+    try {
+      const file = join(dir, "rows.ndjson");
+      async function* rows() {
+        yield { tile: 1 };
+        yield { tile: 2 };
+      }
+      await writeNdjson(file, rows());
+      expect(await readFile(file, "utf8")).toBe('{"tile":1}\n{"tile":2}\n');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects when the rows fail midway", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ndjson-test-"));
+    try {
+      async function* rows() {
+        yield { tile: 1 };
+        throw new Error("API error");
+      }
+      await expect(writeNdjson(join(dir, "rows.ndjson"), rows())).rejects.toThrow("API error");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

@@ -59,42 +59,42 @@ export class BigQueryRawStore implements RawDataStore {
 
   async replaceLandPrices(
     year: number,
-    rows: readonly { classification: "0" | "1"; record: PointRecord }[],
+    rows: AsyncIterable<{ classification: "0" | "1"; record: PointRecord }>,
     fetchedAt: Date,
   ): Promise<void> {
     await this.writer.replace(
       RAW_LAND_PRICES,
-      rows.map((row) => landPriceRow(row.record, year, row.classification, fetchedAt)),
+      mapRows(rows, (row) => landPriceRow(row.record, year, row.classification, fetchedAt)),
       `${year}0101`,
     );
   }
 
   async replaceStationTransactions(
     period: { from: Quarter; to: Quarter },
-    rows: readonly PointRecord[],
+    rows: AsyncIterable<PointRecord>,
     fetchedAt: Date,
   ): Promise<void> {
     await this.writer.replace(
       RAW_STATION_TRANSACTIONS,
-      rows.map((row) => stationTransactionRow(row, period.from, period.to, fetchedAt)),
+      mapRows(rows, (row) => stationTransactionRow(row, period.from, period.to, fetchedAt)),
     );
   }
 
   async replaceCondoTransactions(
     period: { from: Quarter; to: Quarter },
-    rows: readonly PointRecord[],
+    rows: AsyncIterable<PointRecord>,
     fetchedAt: Date,
   ): Promise<void> {
     await this.writer.replace(
       RAW_CONDO_TRANSACTIONS,
-      rows.map((row) => condoTransactionRow(row, period.from, period.to, fetchedAt)),
+      mapRows(rows, (row) => condoTransactionRow(row, period.from, period.to, fetchedAt)),
     );
   }
 
-  async replaceStations(rows: readonly StationRecord[], fetchedAt: Date): Promise<void> {
+  async replaceStations(rows: AsyncIterable<StationRecord>, fetchedAt: Date): Promise<void> {
     await this.writer.replace(
       RAW_STATIONS,
-      rows.map((row) => stationRow(row, fetchedAt)),
+      mapRows(rows, (row) => stationRow(row, fetchedAt)),
     );
   }
 
@@ -114,4 +114,12 @@ export class BigQueryRawStore implements RawDataStore {
       rows.map((row) => statisticRow(row.table, row.record, fetchedAt)),
     );
   }
+}
+
+// 1 行ずつ変換して渡す。変換後の行も配列に溜めない。
+async function* mapRows<T>(
+  rows: AsyncIterable<T>,
+  toRow: (row: T) => Record<string, unknown>,
+): AsyncGenerator<Record<string, unknown>> {
+  for await (const row of rows) yield toRow(row);
 }

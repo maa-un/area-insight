@@ -81,6 +81,8 @@ export interface TileCatalog {
 }
 
 // 取得したデータの保存先。同じ範囲を丸ごと置き換え、何度実行しても結果が同じになるようにする。
+// タイルごとに取るデータは全国分を配列に溜めるとヒープが足りなくなるため、AsyncIterable で少しずつ受け取る。
+// 実装は rows を 1 度だけ最後まで読み、読み終えてから置き換える。途中で例外になったら置き換えない。
 export interface RawDataStore {
   replaceMunicipalities(
     rows: readonly { prefectureCode: string; record: MunicipalityRecord }[],
@@ -94,23 +96,23 @@ export interface RawDataStore {
   // 指定した年の地価（地価公示と地価調査）を置き換える。
   replaceLandPrices(
     year: number,
-    rows: readonly { classification: "0" | "1"; record: PointRecord }[],
+    rows: AsyncIterable<{ classification: "0" | "1"; record: PointRecord }>,
     fetchedAt: Date,
   ): Promise<void>;
   // 駅ごとの取引は直近の期間だけを使うため、全体を置き換える。
   replaceStationTransactions(
     period: { from: Quarter; to: Quarter },
-    rows: readonly PointRecord[],
+    rows: AsyncIterable<PointRecord>,
     fetchedAt: Date,
   ): Promise<void>;
   // マンションの取引は成約事例として過去数年分を使うため、指定した期間で全体を置き換える。
   replaceCondoTransactions(
     period: { from: Quarter; to: Quarter },
-    rows: readonly PointRecord[],
+    rows: AsyncIterable<PointRecord>,
     fetchedAt: Date,
   ): Promise<void>;
   // 駅は年に 1 度更新される全国のデータのため、全体を置き換える。
-  replaceStations(rows: readonly StationRecord[], fetchedAt: Date): Promise<void>;
+  replaceStations(rows: AsyncIterable<StationRecord>, fetchedAt: Date): Promise<void>;
   // 統計は対象の表をまとめて取り直し、全体を置き換える。
   replaceStatistics(
     rows: readonly { table: StatisticsTable; record: StatisticRecord }[],
