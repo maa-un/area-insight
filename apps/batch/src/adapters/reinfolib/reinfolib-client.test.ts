@@ -111,6 +111,26 @@ describe("ReinfolibClient", () => {
     expect(url.searchParams.get("landTypeCode")).toBe("01,02");
   });
 
+  it("asks condo trades with both the transaction and the contract prices", async () => {
+    const fetchFn = vi.fn(async () => Response.json([]));
+    await client(fetchFn as typeof fetch).condoTransactions(
+      { z: 11, x: 1818, y: 806 },
+      { year: 2021, quarter: 3 },
+      { year: 2026, quarter: 2 },
+    );
+    const url = new URL((fetchFn.mock.calls as unknown as [string][])[0]?.[0] ?? "");
+    expect(url.pathname).toMatch(/XPT001$/);
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      response_format: "geojson",
+      z: "11",
+      x: "1818",
+      y: "806",
+      from: "20213",
+      to: "20262",
+      landTypeCode: "07",
+    });
+  });
+
   it("reads stations as lines and keeps their geometry and properties", async () => {
     const geometry = {
       type: "LineString",

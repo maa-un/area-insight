@@ -20,7 +20,7 @@ import { NO_DATA_COLOR, STATION_COLOR } from "@/lib/map-scale";
 // 市区町村は境界の面を指標で塗り分ける。色は地物の feature-state に持たせ、指標を切り替えても
 // 3MB の境界を作り直さずに済むようにする。
 
-export type LayerId = "areas" | "land" | "stations";
+export type LayerId = "areas" | "land" | "stations" | "condos";
 type PointLayerId = Exclude<LayerId, "areas">;
 
 export type Feature = { coordinates: LngLat; properties: Record<string, string | number | null> };
@@ -37,6 +37,8 @@ export type MapController = {
   selectArea: (code: MunicipalityCode | null) => void;
   setVisible: (layer: LayerId, visible: boolean) => void;
   flyTo: (center: LngLat, zoom: number) => void;
+  // 点の範囲に合わせて表示する（[西, 南, 東, 北]）
+  fitBounds: (bounds: [number, number, number, number]) => void;
   destroy: () => void;
 };
 
@@ -65,9 +67,15 @@ function collection(features: Feature[]): FeatureCollection {
 
 export function createMap(
   container: HTMLElement,
-  options: { initial?: { center: LngLat; zoom: number }; onSelect: (s: Selection | null) => void },
+  options: {
+    initial?: { center: LngLat; zoom: number };
+    onSelect: (s: Selection | null) => void;
+    // false なら市区町村の境界（3MB）を読まない。成約事例の地図は駅の点だけを使う
+    areas?: boolean;
+  },
 ): Promise<MapController> {
   const initial = options.initial ?? JAPAN;
+  const withAreas = options.areas !== false;
   const map = new MapLibreMap({
     container,
     center: initial.center,
@@ -86,62 +94,36 @@ export function createMap(
           attribution:
             '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>',
         },
-        areas: {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] },
-          // properties.code を地物の id にし、feature-state で色と選択を持たせる
-          promoteId: "code",
-          attribution:
-            '<a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html" target="_blank" rel="noopener">国土数値情報（行政区域データ）</a>（国土交通省）をもとに合同会社Maa\'un Japan 作成',
-        },
+        ...(withAreas && {
+          areas: {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+            // properties.code を地物の id にし、feature-state で色と選択を持たせる
+            promoteId: "code",
+            attribution:
+              '<a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html" target="_blank" rel="noopener">国土数値情報（行政区域データ）</a>（国土交通省）をもとに合同会社Maa\'un Japan 作成',
+          },
+        }),
       },
       layers: [{ id: "gsi", type: "raster", source: "gsi" }],
     },
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
   // 地図の準備と並行して境界を取りに行く
-  const boundaries = loadBoundaries();
+  const boundaries: Promise<FeatureCollection | null> = withAreas
+    ? loadBoundaries()
+    : Promise.resolve(null);
   // 失敗は areasLoaded で伝える。地図の準備が終わる前に失敗しても未処理の reject にしない
   boundaries.catch(() => undefined);
 
   return new Promise((resolve) => {
     map.on("load", () => {
-      for (const id of ["land", "stations"] as const) {
+      for (const id of ["land", "stations", "condos"] as const) {
         map.addSource(id, { type: "geojson", data: collection([]) });
       }
       // 広域では市区町村の塗り分け、拡大すると地価と駅のポイントが見えるようにする。
       // 拡大するほど面を薄くし、背景の地図の地名や道路を読めるようにする。
-      map.addLayer({
-        id: "areas",
-        type: "fill",
-        source: "areas",
-        paint: {
-          "fill-color": ["to-color", ["coalesce", ["feature-state", "color"], NO_DATA_COLOR]],
-          "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 10, 0.6, 13, 0.3],
-        },
-      });
-      // 境界線。押した市区町村は濃く太くする（ズームの補間は 1 つしか書けないため、各段で分ける）
-      const isSelected: ExpressionSpecification = ["boolean", ["feature-state", "selected"], false];
-      map.addLayer({
-        id: "areas-outline",
-        type: "line",
-        source: "areas",
-        layout: { "line-join": "round" },
-        paint: {
-          "line-color": ["case", isSelected, "#2a2622", "rgba(42, 38, 34, 0.3)"],
-          "line-width": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            5,
-            ["case", isSelected, 2, 0.3],
-            9,
-            ["case", isSelected, 2.5, 0.7],
-            12,
-            ["case", isSelected, 3.5, 1.2],
-          ],
-        },
-      });
+      if (withAreas) addAreaLayers(map);
       map.addLayer({
         id: "land",
         type: "circle",
@@ -166,9 +148,33 @@ export function createMap(
           "circle-stroke-width": 2,
         },
       });
+      // 成約事例の駅。色（坪単価）と大きさ（件数）は点ごとに持たせる。選んだ駅は濃い縁で示す
+      const isPicked: ExpressionSpecification = ["==", ["get", "selected"], 1];
+      map.addLayer({
+        id: "condos",
+        type: "circle",
+        source: "condos",
+        paint: {
+          "circle-color": ["get", "color"],
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            7,
+            ["*", 0.5, ["get", "size"]],
+            14,
+            ["*", 1.5, ["get", "size"]],
+          ],
+          "circle-opacity": 0.9,
+          "circle-stroke-color": ["case", isPicked, "#2a2622", "#ffffff"],
+          "circle-stroke-width": ["case", isPicked, 3, 1.5],
+        },
+      });
 
-      // 上に描いたもの（駅 → 地価 → 市区町村）を優先して選ぶ。
-      const order: LayerId[] = ["stations", "land", "areas"];
+      // 上に描いたもの（成約事例 → 駅 → 地価 → 市区町村）を優先して選ぶ。
+      const order: LayerId[] = ["condos", "stations", "land", "areas"].filter((id) =>
+        map.getLayer(id),
+      ) as LayerId[];
       map.on("click", (event: MapLayerMouseEvent) => {
         const layers = order.filter(
           (id) => map.getLayer(id) && map.getLayoutProperty(id, "visibility") !== "none",
@@ -199,6 +205,7 @@ export function createMap(
         if (selected) map.setFeatureState({ source: "areas", id: selected }, { selected: true });
       };
       const areasLoaded = boundaries.then((data) => {
+        if (!data) return;
         (map.getSource("areas") as GeoJSONSource).setData(data);
         loaded = true;
         applyColors();
@@ -222,13 +229,57 @@ export function createMap(
             map.setFeatureState({ source: "areas", id: code }, { selected: true });
         },
         setVisible: (layer, visible) => {
+          if (!map.getLayer(layer)) return;
           const value = visible ? "visible" : "none";
           map.setLayoutProperty(layer, "visibility", value);
           if (layer === "areas") map.setLayoutProperty("areas-outline", "visibility", value);
         },
         flyTo: (center, zoom) => map.flyTo({ center, zoom }),
+        fitBounds: ([west, south, east, north]) =>
+          map.fitBounds(
+            [
+              [west, south],
+              [east, north],
+            ],
+            { padding: 40, maxZoom: 13, duration: 600 },
+          ),
         destroy: () => map.remove(),
       });
     });
+  });
+}
+
+// 市区町村の面と境界線。
+function addAreaLayers(map: MapLibreMap): void {
+  map.addLayer({
+    id: "areas",
+    type: "fill",
+    source: "areas",
+    paint: {
+      "fill-color": ["to-color", ["coalesce", ["feature-state", "color"], NO_DATA_COLOR]],
+      "fill-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 10, 0.6, 13, 0.3],
+    },
+  });
+  // 境界線。押した市区町村は濃く太くする（ズームの補間は 1 つしか書けないため、各段で分ける）
+  const isSelected: ExpressionSpecification = ["boolean", ["feature-state", "selected"], false];
+  map.addLayer({
+    id: "areas-outline",
+    type: "line",
+    source: "areas",
+    layout: { "line-join": "round" },
+    paint: {
+      "line-color": ["case", isSelected, "#2a2622", "rgba(42, 38, 34, 0.3)"],
+      "line-width": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        5,
+        ["case", isSelected, 2, 0.3],
+        9,
+        ["case", isSelected, 2.5, 0.7],
+        12,
+        ["case", isSelected, 3.5, 1.2],
+      ],
+    },
   });
 }

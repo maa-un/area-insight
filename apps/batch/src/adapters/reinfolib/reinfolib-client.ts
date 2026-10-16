@@ -123,6 +123,16 @@ export class ReinfolibClient implements PublicDataSource {
     });
   }
 
+  // XPT001: 「中古マンション等」（landTypeCode 07）の取引。位置は物件の最寄り駅。
+  // 成約事例として使うため、取引価格（アンケート）と成約価格（レインズ）の両方を取る（priceClassification を付けない）。
+  async condoTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]> {
+    return this.points("XPT001", tile, {
+      from: `${from.year}${from.quarter}`,
+      to: `${to.year}${to.quarter}`,
+      landTypeCode: "07",
+    });
+  }
+
   // XKT015: 国土数値情報（駅別乗降客数）。駅名・路線名・運営会社と、駅の位置（線）を持つ。
   async stations(tile: Tile): Promise<StationRecord[]> {
     const body = await this.tile("XKT015", tile, {});

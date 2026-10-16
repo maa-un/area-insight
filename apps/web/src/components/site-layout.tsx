@@ -1,4 +1,5 @@
 import {
+  Building2,
   Columns3,
   FlaskConical,
   Home,
@@ -26,6 +27,13 @@ const NAV: {
 }[] = [
   { page: "home", label: "ホーム", short: "ホーム", href: "/", icon: Home },
   { page: "map", label: "地図で探す", short: "地図", href: "/map/", icon: MapIcon },
+  {
+    page: "condos",
+    label: "マンション成約事例",
+    short: "成約事例",
+    href: "/condos/",
+    icon: Building2,
+  },
   {
     page: "rankings",
     label: "ランキング",
@@ -189,7 +197,7 @@ function TabBar({ page }: { page: PageName }) {
       aria-label="メイン（下部）"
       className="vt-tabbar fixed inset-x-0 bottom-0 z-30 border-t bg-background/85 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden"
     >
-      <div className="mx-auto grid h-16 max-w-md grid-cols-4">
+      <div className="mx-auto grid h-16 max-w-md grid-cols-5">
         {NAV.map((item) => {
           const current = page === item.page;
           return (
@@ -204,7 +212,7 @@ function TabBar({ page }: { page: PageName }) {
             >
               <span
                 className={cn(
-                  "relative flex h-7 w-14 items-center justify-center rounded-full transition-all duration-300",
+                  "relative flex h-7 w-12 items-center justify-center rounded-full transition-all duration-300",
                   current && "bg-primary/12",
                 )}
               >

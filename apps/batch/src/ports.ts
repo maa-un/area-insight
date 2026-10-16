@@ -59,6 +59,8 @@ export interface PublicDataSource {
   landPrices(tile: Tile, year: number, classification: "0" | "1"): Promise<PointRecord[]>;
   // XPT001: 最寄り駅の位置に置かれた「土地」と「土地と建物」の取引
   stationTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]>;
+  // XPT001: 最寄り駅の位置に置かれた「中古マンション等」の取引（取引価格と成約価格の両方）
+  condoTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]>;
   // XKT015: 駅の位置・駅名・路線名（駅別乗降客数）
   stations(tile: Tile): Promise<StationRecord[]>;
 }
@@ -97,6 +99,12 @@ export interface RawDataStore {
   ): Promise<void>;
   // 駅ごとの取引は直近の期間だけを使うため、全体を置き換える。
   replaceStationTransactions(
+    period: { from: Quarter; to: Quarter },
+    rows: readonly PointRecord[],
+    fetchedAt: Date,
+  ): Promise<void>;
+  // マンションの取引は成約事例として過去数年分を使うため、指定した期間で全体を置き換える。
+  replaceCondoTransactions(
     period: { from: Quarter; to: Quarter },
     rows: readonly PointRecord[],
     fetchedAt: Date,

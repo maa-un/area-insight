@@ -1,12 +1,15 @@
 import {
   AreaDetail,
   AreaMetricsFile,
+  CondoFile,
   LandPricePoints,
   StationMetricsList,
 } from "@area-insight/shared";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error ビルド前に動かす Node のスクリプト（型定義なし）
-import { centersOf, convert, fullNames, latestRows } from "../../scripts/prepare-data.mjs";
+import * as prepare from "../../scripts/prepare-data.mjs";
+
+const { centersOf, condosByPrefecture, convert, fullNames, latestRows } = prepare;
 
 // BigQuery の JSON 書き出しの形（INT64 は文字列）を模した行。
 const exportRows = {
@@ -408,6 +411,51 @@ describe("prepare-data", () => {
       periodTo: null,
       total: null,
       districts: [],
+    });
+  });
+
+  it("groups condo trades by prefecture and station, newest first", () => {
+    const row = (overrides: Record<string, unknown>) => ({
+      export_id: "2026-10-16T00:00:00.000Z",
+      station_name: "松本",
+      line_names: ["篠ノ井線"],
+      longitude: 137.97,
+      latitude: 36.23,
+      prefecture_code: "20",
+      city_code: "20202",
+      city_name: "松本市",
+      district: "中央",
+      period: "2025Q4",
+      price: "2480",
+      area: "70.5",
+      floor_plan: "3LDK",
+      building_year: "2004",
+      structure: "RC",
+      renovated: null,
+      kind: "transaction",
+      remarks: "",
+      ...overrides,
+    });
+    const files = condosByPrefecture([
+      row({}),
+      row({ period: "2026Q1", kind: "contract", renovated: true, building_year: null }),
+      row({ longitude: 137.9, station_name: null, line_names: [], city_name: "安曇野市" }),
+      row({ export_id: "2026-10-01T00:00:00.000Z", prefecture_code: "13" }),
+    ]);
+    expect([...files.keys()]).toEqual(["20"]);
+    const file = CondoFile.parse(files.get("20"));
+    expect(file.stations).toEqual([
+      { name: "松本", lines: ["篠ノ井線"], cityName: "松本市", coordinates: [137.97, 36.23] },
+      { name: null, lines: [], cityName: "安曇野市", coordinates: [137.9, 36.23] },
+    ]);
+    expect(file.trades[0]).toEqual([0, "2026Q1", 2480, 70.5, "3LDK", null, 1, 1, "中央", "RC", ""]);
+    expect(file.trades.map((t) => t[1])).toEqual(["2026Q1", "2025Q4", "2025Q4"]);
+
+    // 版の古い集計ジョブの書き出しには成約事例の出典が無いため、時点不明で補う
+    expect(AreaMetricsFile.parse(convert(exportRows).metrics).sources.condoTrade).toEqual({
+      source: "XPT001",
+      period: null,
+      asOf: null,
     });
   });
 });

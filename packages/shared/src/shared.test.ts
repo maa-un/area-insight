@@ -81,6 +81,7 @@ describe("AreaMetricsFile", () => {
         prefectureLandPrice: { source: "prefecture_land_price", period: null, asOf: null },
         stationLandTrade: { ...period, source: "XPT001" },
         populationProjection: { source: "ipss_projection", period: null, asOf: "2023-01-01" },
+        condoTrade: { source: "XPT001", period: null, asOf: null },
       },
       sample: true,
       areas: [

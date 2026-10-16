@@ -53,6 +53,23 @@ export async function fetchStationTransactions(
   return rows.length;
 }
 
+// 指定した期間のマンションの取引（中古マンション等）を取り直し、全体を置き換える。
+// 期間を 1 回のリクエストで取るため、リクエスト数は期間の長さによらずタイルの数で決まる。
+export async function fetchCondoTransactions(
+  source: PublicDataSource,
+  tiles: TileCatalog,
+  store: RawDataStore,
+  period: { from: Quarter; to: Quarter },
+  now: Date,
+): Promise<number> {
+  const rows: PointRecord[] = [];
+  for (const tile of await tiles.tiles(STATION_ZOOM)) {
+    rows.push(...(await source.condoTransactions(tile, period.from, period.to)));
+  }
+  await store.replaceCondoTransactions(period, rows, now);
+  return rows.length;
+}
+
 // 駅の位置・駅名・路線名を取り直し、全体を置き換える。集計で XPT001 の点に最寄りの駅名を付けるために使う。
 // タイルの境目をまたぐ駅は両方のタイルで返るが、加工せずそのまま保存し、重複は集計で吸収する。
 export async function fetchStations(

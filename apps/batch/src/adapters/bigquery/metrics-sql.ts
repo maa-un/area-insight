@@ -22,6 +22,8 @@ const HISTORY_YEARS = 5;
 const POPULATION_YEARS = 5;
 // 駅ごとの取引の点に駅名を付けるとき、駅の線から何 m 以内を同じ駅とみなすか。
 const STATION_MATCH_METERS = 300;
+// マンションの取引（XPT001 の中古マンション等）。成約事例の地図に使う。
+const CONDO_TYPE = "中古マンション等";
 // 市区町村ページに出す直近の取引の件数。
 const RECENT_TRANSACTIONS = 8;
 // 地価の用途区分のうち、取引単価と比べるもの（API は「0,住宅地」の形で返す。番号を除いた名前で比べる）。
@@ -67,6 +69,18 @@ const quarterStart = (column: string) => `SAFE.DATE(
 const yen = (column: string) => `IF(
     REGEXP_CONTAINS(${column}, r'万円|億'), (${manYen(column)}) * 10000,
     SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'^([\\d,]+(?:\\.\\d+)?)'), ',', '') AS FLOAT64))`;
+
+// 建築年「1995年」→ 1995。和暦（「平成7年」「令和元年」）でも読む。「戦前」など形が違えば NULL。
+const westernYear = (column: string) => `COALESCE(
+    SAFE_CAST(REGEXP_EXTRACT(${column}, r'^(\\d{4})年') AS INT64),
+    CASE REGEXP_EXTRACT(${column}, r'^(昭和|平成|令和)')
+      WHEN '昭和' THEN 1925 WHEN '平成' THEN 1988 WHEN '令和' THEN 2018 END
+      + IF(REGEXP_CONTAINS(${column}, r'^(?:昭和|平成|令和)元年'), 1,
+        SAFE_CAST(REGEXP_EXTRACT(${column}, r'^(?:昭和|平成|令和)(\\d+)年') AS INT64)))`;
+
+// 「70」「2,000㎡以上」→ 先頭の数値（小数も読む）。全角の数字は半角にそろえてから読む。
+const leadingDecimal = (column: string) =>
+  `SAFE_CAST(REPLACE(REGEXP_EXTRACT(NORMALIZE(${column}, NFKC), r'^([\\d,]+(?:\\.\\d+)?)'), ',', '') AS FLOAT64)`;
 
 // 同じ都道府県の市区町村の中での位置（0〜1）。値の無い市区町村は数えず、比べる相手が少なければ NULL。
 const rankInPrefecture = (column: string) => `IF(
@@ -571,16 +585,69 @@ export function metricsSql(dataset: string): MetricsSql {
       AND official_bands.station_name = nearest.station.station_name
     CROSS JOIN target`;
 
+  // マンションの成約事例（XPT001 の中古マンション等）。1 件ずつ、最寄り駅の名前と、読める形にした値を付けて出す。
+  // 絞り込み（間取り・面積・築年数・時期）と坪単価の計算は画面で行う。
+  //   価格: 「4,700万円」→ 万円  面積: 専有面積（㎡）  間取り・構造: 全角を半角にそろえる（「３ＬＤＫ」→「3LDK」）
+  //   種類: 価格情報区分に「成約」を含めば成約価格（レインズ）、それ以外は取引価格（アンケート）
+  // 取引時期・価格・面積のどれかが読めない取引は出さない（坪単価を出せず、時期で絞れないため）。
+  const condoTransactions = `
+    CREATE OR REPLACE TABLE ${t("condo_transactions")} AS
+    WITH condos AS (
+      SELECT
+        longitude, latitude,
+        LPAD(${prop("properties", "$.city_code")}, 5, '0') AS city_code,
+        ${prop("properties", "$.city_name_ja")} AS city_name,
+        IFNULL(${prop("properties", "$.district_name_ja")}, '') AS district,
+        ${quarterStart(prop("properties", "$.point_in_time_name_ja"))} AS period_start,
+        ${manYen(prop("properties", "$.u_transaction_price_total_ja"))} AS price,
+        ${leadingDecimal(prop("properties", "$.u_area_ja"))} AS area,
+        IFNULL(NORMALIZE(${prop("properties", "$.floor_plan_name_ja")}, NFKC), '') AS floor_plan,
+        ${westernYear(`NORMALIZE(${prop("properties", "$.u_construction_year_ja")}, NFKC)`)} AS building_year,
+        IFNULL(NORMALIZE(${prop("properties", "$.building_structure_name_ja")}, NFKC), '') AS structure,
+        CASE
+          WHEN REGEXP_CONTAINS(${prop("properties", "$.remark_renovation_name_ja")}, r'未') THEN FALSE
+          WHEN REGEXP_CONTAINS(${prop("properties", "$.remark_renovation_name_ja")}, r'済') THEN TRUE
+        END AS renovated,
+        IF(REGEXP_CONTAINS(IFNULL(${prop("properties", "$.price_information_category_name_ja")}, ''), r'成約'),
+          'contract', 'transaction') AS kind,
+        IFNULL(${prop("properties", "$.remark_name_ja")}, '') AS remarks
+      FROM ${t("raw_condo_transactions")}
+      WHERE IFNULL(${prop("properties", "$.land_type_name_ja")}, '${CONDO_TYPE}') = '${CONDO_TYPE}'
+    ),
+    valid AS (
+      SELECT * FROM condos WHERE period_start IS NOT NULL AND price > 0 AND area > 0
+    ),
+    points AS (SELECT DISTINCT longitude, latitude FROM valid),
+    ${stationNames}
+    SELECT
+      nearest.station.station_name,
+      IFNULL(lines.line_names, []) AS line_names,
+      valid.longitude, valid.latitude,
+      SUBSTR(valid.city_code, 1, 2) AS prefecture_code,
+      valid.city_code, valid.city_name, valid.district,
+      FORMAT('%dQ%d', EXTRACT(YEAR FROM valid.period_start), EXTRACT(QUARTER FROM valid.period_start)) AS period,
+      ROUND(valid.price, 1) AS price,
+      ROUND(valid.area, 2) AS area,
+      valid.floor_plan, valid.building_year, valid.structure, valid.renovated, valid.kind, valid.remarks
+    FROM valid
+    LEFT JOIN nearest USING (longitude, latitude)
+    LEFT JOIN lines ON lines.group_code = nearest.station.group_code`;
+
   // 指標ごとの出典と時点（packages/shared の DataSources）。画面はすべての数字のそばに時点を出す。
   //   取引: 期間の最初の四半期の初日〜最新の四半期の末日（指標は直近 4 四半期、土地は 8 四半期）
   //   住宅・土地統計調査: time_code の年の 10 月 1 日時点  住民基本台帳人口: 最新年の 1 月 1 日時点
   //   地価公示・地価調査: land_price_points の価格の時点（取り込む前は NULL）
   //   駅ごとの取引: 取引時期を読んだ範囲（取引相場は直近 4 四半期、土地の坪単価は 8 四半期）
+  //   マンションの成約事例: 取り込んだ期間（condo-transactions ジョブの --recent）
   // 元データが無くても行は出す（時点は NULL）。画面の検証（DataSources）がすべてのキーを求めるため。
   const dataSources = `
     CREATE OR REPLACE TABLE ${t("data_sources")} AS
     WITH latest AS (SELECT MAX(period_start) AS quarter FROM ${t("raw_transactions")}),
     ${stationTrades},
+    condo_period AS (
+      SELECT MIN(period_from) AS period_from, LAST_DAY(DATE_ADD(MAX(period_to), INTERVAL 2 MONTH)) AS period_to
+      FROM ${t("raw_condo_transactions")}
+    ),
     survey AS (
       SELECT table_name, DATE(CAST(SUBSTR(MAX(time_code), 1, 4) AS INT64), 10, 1) AS as_of
       FROM ${t("raw_statistics")} WHERE table_name IN ('housing_vacancy', 'private_rent_per_sqm')
@@ -625,6 +692,9 @@ export function metricsSql(dataset: string): MetricsSql {
     SELECT 'stations', 'XPT001', house_from, IF(house_from IS NULL, NULL, period_to), NULL FROM stations
     UNION ALL
     SELECT 'stationLandTrade', 'XPT001', land_from, IF(land_from IS NULL, NULL, period_to), NULL FROM stations
+    UNION ALL
+    -- マンションの成約事例: 取り込んだ期間（最初の四半期の初日〜最後の四半期の末日）
+    SELECT 'condoTrade', 'XPT001', period_from, IF(period_from IS NULL, NULL, period_to), NULL FROM condo_period
     UNION ALL
     -- 推計の版（取り込んだ年）。令和 5（2023）年推計は shicyoson23
     SELECT 'populationProjection', 'ipss_projection', NULL, NULL,
@@ -683,6 +753,7 @@ export function metricsSql(dataset: string): MetricsSql {
       districtLandPrices,
       stationMetrics,
       stationLandPrices,
+      condoTransactions,
       dataSources,
     ],
     exports: (bucket, exportId) =>
@@ -694,6 +765,7 @@ export function metricsSql(dataset: string): MetricsSql {
         "land_price_points",
         "station_metrics",
         "station_land_prices",
+        "condo_transactions",
       ].map(
         (name) => `
           EXPORT DATA OPTIONS (
