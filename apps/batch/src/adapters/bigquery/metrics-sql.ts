@@ -10,6 +10,9 @@ const LAND_MONTHS = 24;
 // 指標に使う期間（直近 4 四半期）と、推移に使う期間（過去 5 年）。
 const RECENT_MONTHS = 12;
 const HISTORY_MONTHS = 60;
+// 年ごとの推移に使う年数。暦年でそろえ、最新の四半期の年から 5 年さかのぼった年の 1 月 1 日以降を使う
+// （途中の年は画面で「○月まで」と示す）。
+const HISTORY_YEARS = 5;
 // 人口の増減率を何年前と比べるか。
 const POPULATION_YEARS = 5;
 // 駅ごとの取引の点に駅名を付けるとき、駅の線から何 m 以内を同じ駅とみなすか。
@@ -161,12 +164,16 @@ export function metricsSql(dataset: string): MetricsSql {
         FROM history GROUP BY code, period_start
       ) GROUP BY code
     ),
+    yearly_source AS (
+      SELECT h.* FROM houses AS h, latest
+      WHERE h.period_start >= DATE_TRUNC(DATE_SUB(latest.quarter, INTERVAL ${HISTORY_YEARS} YEAR), YEAR)
+    ),
     years AS (
       SELECT code, ARRAY_AGG(STRUCT(year, price, count) ORDER BY year) AS years
       FROM (
         SELECT code, EXTRACT(YEAR FROM period_start) AS year,
           ROUND(APPROX_QUANTILES(price, 100)[SAFE_OFFSET(50)]) AS price, COUNT(*) AS count
-        FROM history GROUP BY code, year
+        FROM yearly_source GROUP BY code, year
       ) GROUP BY code
     ),
     recent AS (
