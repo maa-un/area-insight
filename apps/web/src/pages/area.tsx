@@ -1,6 +1,7 @@
 import { type AreaDetail, prefectureName, RELIABLE_TRADE_COUNT } from "@area-insight/shared";
 import { ArrowUpRight, ChevronRight, Map as MapIcon } from "lucide-react";
 import { AreaActions } from "@/components/area-actions";
+import { LandPriceSection } from "@/components/land-prices";
 import { TrendChart } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,8 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
           );
         })}
       </section>
+
+      <LandPriceSection areaName={area.name} landPrices={detail.landPrices} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
