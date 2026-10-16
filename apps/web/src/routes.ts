@@ -12,6 +12,7 @@ export type Route =
   | { page: "area"; detail: AreaDetail }
   | { page: "privacy" }
   | { page: "terms" }
+  | { page: "version" }
   | { page: "not-found" }
   | { page: "unauthorized" };
 
@@ -46,8 +47,8 @@ export function pathOf(route: Route): string | undefined {
 
 const SITE = "area-insight";
 
-// ページごとの title と description（SEO）。
-export function headOf(route: Route): { title: string; description: string } {
+// ページごとの title と description（SEO）。noindex のページは検索に載せず、sitemap にも入れない。
+export function headOf(route: Route): { title: string; description: string; noindex?: true } {
   switch (route.page) {
     case "home":
       return {
@@ -84,6 +85,8 @@ export function headOf(route: Route): { title: string; description: string } {
       };
     case "terms":
       return { title: `利用規約 | ${SITE}`, description: `${SITE} の利用規約` };
+    case "version":
+      return { title: `バージョン | ${SITE}`, description: "", noindex: true };
     case "not-found":
       return { title: `ページが見つかりません | ${SITE}`, description: "" };
     case "unauthorized":
@@ -105,6 +108,7 @@ export function allRoutes(detailOf: (code: string) => AreaDetail | undefined): R
     ...areas,
     { page: "privacy" },
     { page: "terms" },
+    { page: "version" },
     { page: "not-found" },
     { page: "unauthorized" },
   ];
@@ -117,7 +121,7 @@ export function pageOfPath(pathname: string): { page: PageName; code?: string } 
   if (area) return { page: "area", code: area[1] };
   const name = path.slice(1, -1);
   if (name === "") return { page: "home" };
-  if (["map", "rankings", "compare", "privacy", "terms"].includes(name)) {
+  if (["map", "rankings", "compare", "privacy", "terms", "version"].includes(name)) {
     return { page: name as PageName };
   }
   return { page: "not-found" };

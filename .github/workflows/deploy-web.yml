@@ -9,6 +9,8 @@ on:
       - 'apps/web/**'
       - 'packages/shared/**'
       - 'pnpm-lock.yaml'
+      # 版を上げたら /version の表示を更新する
+      - 'package.json'
       - '.github/workflows/deploy-web.yml'
   workflow_dispatch:
   repository_dispatch:
