@@ -112,7 +112,8 @@ function pointRow(record: PointRecord, fetchedAt: Date): Record<string, unknown>
   return {
     longitude: record.coordinates[0],
     latitude: record.coordinates[1],
-    properties: JSON.stringify(record.properties),
+    // JSON 型の列には、文字列にせずオブジェクトのまま渡す（文字列にすると JSON の文字列として保存される）
+    properties: record.properties,
     fetched_at: fetchedAt.toISOString(),
   };
 }
@@ -176,8 +177,8 @@ export const RAW_STATIONS: TableSpec = {
 
 export function stationRow(record: StationRecord, fetchedAt: Date): Record<string, unknown> {
   return {
-    geometry: JSON.stringify(record.geometry),
-    properties: JSON.stringify(record.properties),
+    geometry: record.geometry,
+    properties: record.properties,
     fetched_at: fetchedAt.toISOString(),
   };
 }
@@ -206,7 +207,7 @@ export function statisticRow(
     table_name: table.name,
     stats_data_id: table.id,
     area_code: record.areaCode,
-    categories: JSON.stringify(record.categories),
+    categories: record.categories,
     time_code: record.time,
     value: record.value,
     unit: record.unit,

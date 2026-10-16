@@ -31,14 +31,16 @@ describe("transactionRow", () => {
 });
 
 describe("stationRow", () => {
-  it("keeps the geometry and properties as JSON in the declared columns", () => {
+  // JSON 型の列には文字列にせずオブジェクトで渡す。文字列にすると「JSON の文字列」として保存され、
+  // 集計の JSON_VALUE で中身を読めなくなる（v0.2.0 で起きた）。
+  it("passes geometry and properties to the JSON columns as objects, not strings", () => {
     const row = stationRow(
       { geometry: { type: "LineString", coordinates: [] }, properties: { S12_001_ja: "新宿" } },
       new Date("2026-10-15T00:00:00Z"),
     );
     expect(row).toEqual({
-      geometry: '{"type":"LineString","coordinates":[]}',
-      properties: '{"S12_001_ja":"新宿"}',
+      geometry: { type: "LineString", coordinates: [] },
+      properties: { S12_001_ja: "新宿" },
       fetched_at: "2026-10-15T00:00:00.000Z",
     });
     expect(Object.keys(row).sort()).toEqual(RAW_STATIONS.schema.map((field) => field.name).sort());

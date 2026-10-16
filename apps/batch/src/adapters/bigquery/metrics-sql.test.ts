@@ -34,4 +34,16 @@ describe("metricsSql", () => {
       "ST_DWITHIN(ST_GEOGPOINT(p.longitude, p.latitude), s.geography, 300)",
     );
   });
+
+  it("pads municipality codes that come back without the leading zero", () => {
+    // XIT001 は函館市 01202 を "1202" で返す
+    expect(sql.rebuild[0]).toContain("LPAD(municipality_code, 5, '0')");
+  });
+
+  it("reads JSON columns stored either as objects or as JSON strings", () => {
+    const all = sql.rebuild.join("\n");
+    expect(all).toContain("JSON_TYPE(categories) = 'string'");
+    expect(all).toContain("JSON_TYPE(properties) = 'string'");
+    expect(all).not.toMatch(/JSON_VALUE\((properties|categories), '\$/);
+  });
 });
