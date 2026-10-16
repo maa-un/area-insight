@@ -48,7 +48,7 @@ export function HomePage() {
         <Eyebrow>
           全国 {dataset.areas.length.toLocaleString("ja-JP")} 市区町村を公的データで
         </Eyebrow>
-        <h1 className="max-w-3xl text-4xl font-extrabold tracking-tight text-balance sm:text-5xl">
+        <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
           その土地、<span className="text-terracotta">高い</span>のか
           <span className="text-terracotta">安い</span>のか。
         </h1>

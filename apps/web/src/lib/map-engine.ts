@@ -128,7 +128,7 @@ export function createMap(
         source: "areas",
         layout: { "line-join": "round" },
         paint: {
-          "line-color": ["case", isSelected, "#26201a", "rgba(38, 32, 26, 0.35)"],
+          "line-color": ["case", isSelected, "#2a2622", "rgba(42, 38, 34, 0.3)"],
           "line-width": [
             "interpolate",
             ["linear"],
@@ -150,7 +150,7 @@ export function createMap(
         paint: {
           "circle-color": ["get", "color"],
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 14, 8],
-          "circle-stroke-color": "#26201a",
+          "circle-stroke-color": "#2a2622",
           "circle-stroke-width": 1,
         },
       });
@@ -162,7 +162,7 @@ export function createMap(
         paint: {
           "circle-color": STATION_COLOR,
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 14, 10],
-          "circle-stroke-color": "#f3e9d2",
+          "circle-stroke-color": "#f5f2eb",
           "circle-stroke-width": 2,
         },
       });
