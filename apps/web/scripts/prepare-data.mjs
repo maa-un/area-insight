@@ -148,6 +148,14 @@ async function main(dir) {
     console.log("no exports found; building with sample data");
     return;
   }
+  // 書き出しの途中（EXPORT DATA が古いファイルを消してから書く間）に取ると、一部のテーブルだけ空になる。
+  // そのまま作ると画面から項目が消えるため、ビルドを失敗させる。
+  const missing = TABLES.filter((name) => tables[name].length === 0);
+  if (missing.length > 0) {
+    throw new Error(
+      `exports are incomplete (no rows): ${missing.join(", ")}; retry after the aggregate job finishes`,
+    );
+  }
   const boundaries = JSON.parse(
     await readFile(new URL("../src/data/boundaries.json", import.meta.url), "utf8"),
   );
