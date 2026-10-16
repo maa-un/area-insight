@@ -30,6 +30,12 @@ describe("metricsSql", () => {
     expect(exports[0]).toContain("'2026-10-16T00:00:00.000Z' AS export_id");
   });
 
+  it("compares the 2020 census with the 2050 projection", () => {
+    expect(sql.rebuild[1]).toContain("`proj.ds.raw_population_projection`");
+    expect(sql.rebuild[1]).toContain("AS projected_population_2050");
+    expect(sql.rebuild.join("\n")).toContain("'populationProjection', 'ipss_projection'");
+  });
+
   it("dates each metric from its raw table", () => {
     const sources = table("data_sources");
     expect(sources).toContain("'tradePrice' AS metric, 'XIT001' AS source");

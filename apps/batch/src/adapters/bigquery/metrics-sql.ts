@@ -11,6 +11,9 @@ const LAND_TYPE = "宅地(土地)";
 const LAND_MONTHS = 24;
 // 指標に使う期間（直近 4 四半期）と、推移に使う期間（過去 5 年）。
 const RECENT_MONTHS = 12;
+// 将来推計人口の比較: 2020 年（国勢調査の実績）→ 2050 年（推計の最終年）
+const PROJECTION_BASE_YEAR = 2020;
+const PROJECTION_TARGET_YEAR = 2050;
 const HISTORY_MONTHS = 60;
 // 年ごとの推移に使う年数。暦年でそろえ、最新の四半期の年から 5 年さかのぼった年の 1 月 1 日以降を使う
 // （途中の年は画面で「○月まで」と示す）。
@@ -207,6 +210,16 @@ export function metricsSql(dataset: string): MetricsSql {
       JOIN population AS now ON now.code = l.code AND now.year = l.year
       LEFT JOIN population AS past ON past.code = l.code AND past.year = l.year - ${POPULATION_YEARS}
     ),
+    -- 将来推計人口（社人研）。2020 年の実績（国勢調査）と 2050 年の推計を比べる
+    projection AS (
+      SELECT
+        code,
+        MAX(IF(year = ${PROJECTION_BASE_YEAR}, population, NULL)) AS base_population,
+        MAX(IF(year = ${PROJECTION_TARGET_YEAR}, population, NULL)) AS projected_population
+      FROM ${t("raw_population_projection")}
+      WHERE sex = '男女計' AND age_group = '総数'
+      GROUP BY code
+    ),
     -- 市区町村の代表点。画面はビルド時に境界（国土数値情報 N03）の重心で置き換える（apps/web/scripts/prepare-data.mjs）。
     -- ここでは境界に無い市区町村のための控えとして、地価の地点（無ければ駅）の平均位置を出す
     land_center AS (
@@ -227,6 +240,9 @@ export function metricsSql(dataset: string): MetricsSql {
         ROUND(vacancy.vacancy_rate, 1) AS vacancy_rate,
         population_change.population,
         ROUND(population_change.change_rate, 1) AS population_change_rate,
+        projection.projected_population AS projected_population_${PROJECTION_TARGET_YEAR},
+        ROUND(SAFE_DIVIDE(projection.projected_population - projection.base_population, projection.base_population) * 100, 1)
+          AS projected_change_rate,
         -- 家賃相場 = 民営借家の㎡家賃 × その市区町村で取引された戸建の延床面積（中央値）
         ROUND(rent.rent_per_sqm * trade.floor_area, -3) AS monthly_rent,
         ROUND(rent.rent_per_sqm) AS rent_per_sqm,
@@ -249,6 +265,7 @@ export function metricsSql(dataset: string): MetricsSql {
       LEFT JOIN vacancy USING (code)
       LEFT JOIN rent USING (code)
       LEFT JOIN population_change USING (code)
+      LEFT JOIN projection USING (code)
       LEFT JOIN land_center USING (code)
       LEFT JOIN station_center USING (code)
     ),
@@ -330,6 +347,13 @@ export function metricsSql(dataset: string): MetricsSql {
       WHERE table_name = 'resident_population' AND SAFE_CAST(value AS FLOAT64) IS NOT NULL
       GROUP BY code
     ),
+    -- 将来推計人口（社人研、男女計の総数）。2020 年は国勢調査の実績
+    projection AS (
+      SELECT code, ARRAY_AGG(STRUCT(year, population) ORDER BY year) AS population_projection
+      FROM ${t("raw_population_projection")}
+      WHERE sex = '男女計' AND age_group = '総数' AND population IS NOT NULL
+      GROUP BY code
+    ),
     -- 住宅地の地価（公示地価・地価調査の最新年の地点）。取引単価との比較の基準にする
     residential AS (
       SELECT code, price, station_distance_m FROM ${t("land_price_points")} WHERE use = '${RESIDENTIAL_USE}'
@@ -354,6 +378,7 @@ export function metricsSql(dataset: string): MetricsSql {
       IFNULL(quarters.quarters, []) AS quarters,
       IFNULL(years.years, []) AS years,
       IFNULL(population.population_history, []) AS population_history,
+      IFNULL(projection.population_projection, []) AS population_projection,
       IFNULL(recent.recent_transactions, []) AS recent_transactions,
       IF(official.code IS NULL, NULL, STRUCT(official.price, official.count)) AS official_land_price,
       IFNULL(by_distance.bands, []) AS land_prices_by_station_distance
@@ -362,6 +387,7 @@ export function metricsSql(dataset: string): MetricsSql {
     LEFT JOIN years USING (code)
     LEFT JOIN recent USING (code)
     LEFT JOIN population USING (code)
+    LEFT JOIN projection USING (code)
     LEFT JOIN official USING (code)
     LEFT JOIN by_distance USING (code)`;
 
@@ -599,6 +625,11 @@ export function metricsSql(dataset: string): MetricsSql {
     SELECT 'stations', 'XPT001', house_from, IF(house_from IS NULL, NULL, period_to), NULL FROM stations
     UNION ALL
     SELECT 'stationLandTrade', 'XPT001', land_from, IF(land_from IS NULL, NULL, period_to), NULL FROM stations
+    UNION ALL
+    -- 推計の版（取り込んだ年）。令和 5（2023）年推計は shicyoson23
+    SELECT 'populationProjection', 'ipss_projection', NULL, NULL,
+      DATE(2000 + CAST(REGEXP_EXTRACT(MAX(edition), r'(\\d+)$') AS INT64), 1, 1)
+    FROM ${t("raw_population_projection")}
     UNION ALL
     SELECT 'officialLandPrice', 'official_land_price', NULL, NULL, official FROM land_prices
     UNION ALL

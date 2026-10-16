@@ -80,6 +80,7 @@ describe("AreaMetricsFile", () => {
         officialLandPrice: { source: "official_land_price", period: null, asOf: "2026-01-01" },
         prefectureLandPrice: { source: "prefecture_land_price", period: null, asOf: null },
         stationLandTrade: { ...period, source: "XPT001" },
+        populationProjection: { source: "ipss_projection", period: null, asOf: "2023-01-01" },
       },
       sample: true,
       areas: [
@@ -92,6 +93,8 @@ describe("AreaMetricsFile", () => {
           vacancyRate: 12.3,
           population: 68000,
           populationChangeRate: 2.1,
+          projectedPopulation2050: null,
+          projectedChangeRate: null,
           grossYield: null,
           monthlyRent: null,
           rentPerSqm: null,

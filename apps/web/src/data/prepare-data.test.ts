@@ -77,6 +77,14 @@ const exportRows = {
     },
     {
       export_id: "2026-10-16T00:00:00.000Z",
+      metric: "populationProjection",
+      source: "ipss_projection",
+      period_from: null,
+      period_to: null,
+      as_of: "2023-01-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
       metric: "stationLandTrade",
       source: "XPT001",
       period_from: null,
@@ -140,6 +148,10 @@ const exportRows = {
     {
       export_id: "2026-10-16T00:00:00.000Z",
       code: "20202",
+      population_projection: [
+        { year: "2020", population: "241145" },
+        { year: "2050", population: "207208" },
+      ],
       quarters: [{ period: "2026Q2", price: 1900, count: "9" }],
       years: [{ year: "2026", price: 1900, count: "20" }],
       population_history: [{ year: "2024", population: "234111" }],
@@ -330,6 +342,10 @@ describe("prepare-data", () => {
     expect(AreaDetail.parse(data.details[1]).stationLandPrices).toEqual([]);
 
     expect(AreaDetail.parse(data.details[0]).recentTransactions[0]?.buildingYear).toBe(1998);
+    expect(AreaDetail.parse(data.details[0]).populationProjection).toEqual([
+      { year: 2020, population: 241145 },
+      { year: 2050, population: 207208 },
+    ]);
     expect(LandPricePoints.parse(data.landPrices)[0]).toMatchObject({
       price: 75200,
       kind: "prefecture",

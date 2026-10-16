@@ -11,6 +11,8 @@ const base: AreaMetrics = {
   vacancyRate: 13.9,
   population: 234111,
   populationChangeRate: -1.9,
+  projectedPopulation2050: null,
+  projectedChangeRate: null,
   grossYield: 6.7,
   monthlyRent: 140000,
   rentPerSqm: null,

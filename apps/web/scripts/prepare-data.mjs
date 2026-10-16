@@ -167,6 +167,8 @@ export function convert(
         vacancyRate: num(row.vacancy_rate),
         population: num(row.population),
         populationChangeRate: num(row.population_change_rate),
+        projectedPopulation2050: num(row.projected_population_2050),
+        projectedChangeRate: num(row.projected_change_rate),
         grossYield: num(row.gross_yield),
         monthlyRent: num(row.monthly_rent),
         rentPerSqm: num(row.rent_per_sqm),
@@ -199,6 +201,10 @@ export function convert(
         count: num(y.count),
       })),
       populationHistory: (row.population_history ?? []).map((p) => ({
+        year: num(p.year),
+        population: num(p.population),
+      })),
+      populationProjection: (row.population_projection ?? []).map((p) => ({
         year: num(p.year),
         population: num(p.population),
       })),

@@ -19,6 +19,9 @@ export function formatDataPeriod(data: DataPeriod): string {
   if (data.asOf === null) return "時点不明";
   // 住宅・土地統計調査は 5 年ごとの調査なので、調査年で示す
   if (data.source === "housing_survey") return `${data.asOf.slice(0, 4)}年調査`;
+  // 将来推計人口は推計の年で示す（2020 年国勢調査を基にした推計）
+  if (data.source === "ipss_projection")
+    return `${data.asOf.slice(0, 4)}年推計（2020年国勢調査基準）`;
   return `${formatDate(data.asOf)}時点`;
 }
 

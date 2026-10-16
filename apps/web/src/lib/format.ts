@@ -91,6 +91,7 @@ export function formatMetric(key: string, value: number | null): string {
     case "population":
       return formatCount(value, "人");
     case "populationChangeRate":
+    case "projectedChangeRate":
       return formatPercent(value, { signed: true });
     case "landUnitPrice":
       return formatManYenPerTsubo(value);

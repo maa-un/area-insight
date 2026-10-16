@@ -1,6 +1,7 @@
 import type {
   MunicipalityRecord,
   PointRecord,
+  ProjectionRecord,
   StationRecord,
   StatisticRecord,
   StatisticsTable,
@@ -179,6 +180,38 @@ export function stationRow(record: StationRecord, fetchedAt: Date): Record<strin
   return {
     geometry: record.geometry,
     properties: record.properties,
+    fetched_at: fetchedAt.toISOString(),
+  };
+}
+
+// 社人研の将来推計人口。表の 1 マス（性別 × 年齢階級 × 年）を 1 行にする。
+export const RAW_POPULATION_PROJECTION: TableSpec = {
+  name: "raw_population_projection",
+  schema: [
+    { name: "edition", type: "STRING", mode: "REQUIRED" }, // 推計の版（URL の shicyoson23 など）
+    { name: "code", type: "STRING", mode: "REQUIRED" },
+    { name: "name", type: "STRING", mode: "REQUIRED" },
+    { name: "sex", type: "STRING", mode: "REQUIRED" },
+    { name: "age_group", type: "STRING", mode: "REQUIRED" },
+    { name: "year", type: "INT64", mode: "REQUIRED" },
+    { name: "population", type: "INT64", mode: "NULLABLE" },
+    { name: "fetched_at", type: "TIMESTAMP", mode: "REQUIRED" },
+  ],
+};
+
+export function projectionRow(
+  edition: string,
+  record: ProjectionRecord,
+  fetchedAt: Date,
+): Record<string, unknown> {
+  return {
+    edition,
+    code: record.code,
+    name: record.name,
+    sex: record.sex,
+    age_group: record.ageGroup,
+    year: record.year,
+    population: record.population,
     fetched_at: fetchedAt.toISOString(),
   };
 }

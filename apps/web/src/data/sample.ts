@@ -475,7 +475,20 @@ const round = (value: number, digits = 0) => {
 // 歪みの元になる値。ranked() で都道府県内の順位の差に直す。
 type Unranked = Omit<AreaMetrics, "rentGap" | "landGap" | "momentumGap" | "weakDemand">;
 
+// 将来推計人口のサンプル。5 年ごとの増減率を 2050 年まで続ける（減少は少しずつ強まる）。
+function projectionFor(seed: Seed): { year: number; population: number }[] {
+  const rows: { year: number; population: number }[] = [];
+  let population = seed.population;
+  for (let year = 2020; year <= 2050; year += 5) {
+    rows.push({ year, population: Math.round(population) });
+    population *= 1 + (seed.trend - (year - 2020) / 10) / 100;
+  }
+  return rows;
+}
+
 function metricsFor(seed: Seed): Unranked {
+  const projection = projectionFor(seed);
+  const projected = projection.at(-1)?.population ?? seed.population;
   const rand = random(seed.code);
   // 人口の少ない町ほど取引が少ない。閾値未満（参考値）の例も混ぜる。
   const tradeCount = Math.max(3, Math.round((seed.population / 2500) * (0.6 + rand() * 0.8)));
@@ -497,6 +510,8 @@ function metricsFor(seed: Seed): Unranked {
     vacancyRate: seed.vacancy,
     population: seed.population,
     populationChangeRate: seed.trend,
+    projectedPopulation2050: projected,
+    projectedChangeRate: round(((projected - seed.population) / seed.population) * 100, 1),
     grossYield: round(((monthlyRent * 12) / (seed.price * 10000)) * 100, 1),
     monthlyRent,
     rentPerSqm,
@@ -570,6 +585,7 @@ export const sampleMetrics: AreaMetricsFile = {
     officialLandPrice: { source: "official_land_price", period: null, asOf: SAMPLE_OFFICIAL_AS_OF },
     prefectureLandPrice: { source: "prefecture_land_price", period: null, asOf: "2025-07-01" },
     stationLandTrade: { source: "XPT001", period: SAMPLE_LAND_PERIOD, asOf: null },
+    populationProjection: { source: "ipss_projection", period: null, asOf: "2023-01-01" },
   },
   sample: true,
   areas: SAMPLE_AREAS,
@@ -610,6 +626,7 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     year: 2021 + i,
     population: Math.round(seed.population / (1 + (seed.trend / 100) * ((5 - i) / 5))),
   }));
+  const populationProjection = projectionFor(seed);
 
   const recentTransactions = Array.from({ length: 8 }, (_, i) => {
     const landArea = round(90 + rand() * 180);
@@ -698,6 +715,7 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     quarters,
     years,
     populationHistory,
+    populationProjection,
     landPrices,
     officialLandPrices,
     stationLandPrices,

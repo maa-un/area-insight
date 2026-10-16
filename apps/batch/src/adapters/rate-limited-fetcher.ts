@@ -27,6 +27,21 @@ export class RateLimitedFetcher {
     url: string,
     headers: Record<string, string> = {},
   ): Promise<unknown> {
+    const response = await this.get(label, url, headers);
+    return response === null ? null : response.json();
+  }
+
+  // ファイル（Excel など）をそのまま返す。404 は null。
+  async getBytes(label: string, url: string): Promise<Uint8Array | null> {
+    const response = await this.get(label, url);
+    return response === null ? null : new Uint8Array(await response.arrayBuffer());
+  }
+
+  private async get(
+    label: string,
+    url: string,
+    headers: Record<string, string> = {},
+  ): Promise<Response | null> {
     for (let attempt = 1; ; attempt++) {
       await this.throttle();
       let response: Response;
@@ -42,7 +57,7 @@ export class RateLimitedFetcher {
         continue;
       }
       if (response.status === 404) return null;
-      if (response.ok) return response.json();
+      if (response.ok) return response;
       if (response.status >= 500 && attempt < this.maxAttempts) {
         await this.sleep(backoffMs(attempt));
         continue;
