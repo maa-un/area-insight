@@ -3,6 +3,7 @@ import {
   AreaMetricsFile,
   LandPricePoints,
   type MunicipalityCode,
+  RELIABLE_TRADE_COUNT,
   StationMetricsList,
 } from "@area-insight/shared";
 import { sampleLandPrices, sampleMetrics, sampleStations } from "./sample";
@@ -43,6 +44,28 @@ export type MetricKey = keyof typeof METRICS;
 
 export function isMetricKey(value: string | null): value is MetricKey {
   return value !== null && Object.hasOwn(METRICS, value);
+}
+
+// 取引から出す指標。取引件数が閾値（RELIABLE_TRADE_COUNT）未満の市区町村では値が振れるため「参考値」になる。
+const TRADE_METRICS: readonly MetricKey[] = ["tradePrice", "grossYield"];
+
+export function isTradeMetric(key: MetricKey): boolean {
+  return TRADE_METRICS.includes(key);
+}
+
+export function isReferenceValue(area: AreaMetrics): boolean {
+  return area.tradeCount < RELIABLE_TRADE_COUNT;
+}
+
+// ランキングに載せる市区町村。取引から出す指標では、既定で参考値の市区町村を外す
+// （件数の少ない町村が利回りの上位を占めるのを防ぐ）。人口・空き家率は統計の値なので外さない。
+export function rankableAreas(
+  areas: AreaMetrics[],
+  key: MetricKey,
+  includeReference: boolean,
+): AreaMetrics[] {
+  if (includeReference || !isTradeMetric(key)) return areas;
+  return areas.filter((area) => !isReferenceValue(area));
 }
 
 // 値の無い市区町村は並べ替えの後ろへ回す。

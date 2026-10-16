@@ -8,7 +8,15 @@ import { ArrowDownWideNarrow, ArrowUpNarrowWide, Bookmark, X } from "lucide-reac
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { dataset, isMetricKey, METRICS, type MetricKey, sortAreas } from "@/data";
+import {
+  dataset,
+  isMetricKey,
+  isTradeMetric,
+  METRICS,
+  type MetricKey,
+  rankableAreas,
+  sortAreas,
+} from "@/data";
 import { useAuth } from "@/lib/auth";
 import { formatMetric } from "@/lib/format";
 import { replaceSearchParams, useSearchParams } from "@/lib/search-params";
@@ -22,7 +30,13 @@ const PREFECTURES = PREFECTURE_CODES.filter((code) =>
   dataset.areas.some((area) => area.prefectureCode === code),
 );
 
-type Conditions = { metric: MetricKey; order: "asc" | "desc"; pref?: string };
+type Conditions = {
+  metric: MetricKey;
+  order: "asc" | "desc";
+  pref?: string;
+  // 参考値（取引件数が閾値未満）の市区町村も含めるか。既定は含めない
+  includeReference: boolean;
+};
 
 function conditionsOf(params: URLSearchParams): Conditions {
   const metric = params.get("metric");
@@ -34,22 +48,25 @@ function conditionsOf(params: URLSearchParams): Conditions {
     order:
       order === "asc" || order === "desc" ? order : METRICS[key].better === "low" ? "asc" : "desc",
     pref: pref && PREFECTURE_CODES.includes(pref) ? pref : undefined,
+    includeReference: params.get("ref") === "1",
   };
 }
 
 function describe(c: Conditions): string {
   const area = c.pref ? prefectureName(c.pref) : "全国";
-  return `${area}・${METRICS[c.metric].label}の${c.order === "asc" ? "低い" : "高い"}順`;
+  const reference = isTradeMetric(c.metric) && c.includeReference ? "（参考値を含む）" : "";
+  return `${area}・${METRICS[c.metric].label}の${c.order === "asc" ? "低い" : "高い"}順${reference}`;
 }
 
 export function RankingsPage() {
   const conditions = conditionsOf(useSearchParams());
-  const { metric, order, pref } = conditions;
-  const rows = sortAreas(
-    pref ? dataset.areas.filter((a) => a.prefectureCode === pref) : dataset.areas,
-    metric,
-    order,
-  );
+  const { metric, order, pref, includeReference } = conditions;
+  const inPrefecture = pref
+    ? dataset.areas.filter((a) => a.prefectureCode === pref)
+    : dataset.areas;
+  const ranked = rankableAreas(inPrefecture, metric, includeReference);
+  const hidden = inPrefecture.length - ranked.length;
+  const rows = sortAreas(ranked, metric, order);
 
   return (
     <div className="flex flex-col gap-6">
@@ -95,6 +112,25 @@ export function RankingsPage() {
         </Button>
         <SavedFilters current={conditions} />
       </div>
+
+      {isTradeMetric(metric) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={includeReference}
+              onChange={(e) => replaceSearchParams({ ref: e.target.checked ? "1" : undefined })}
+            />
+            参考値も含める
+          </label>
+          <span className="text-xs text-muted-foreground">
+            {includeReference
+              ? `取引 ${RELIABLE_TRADE_COUNT} 件未満の市区町村（参考値）も並べています`
+              : `取引 ${RELIABLE_TRADE_COUNT} 件未満の ${hidden.toLocaleString("ja-JP")} 市区町村（参考値）を除いています`}
+          </span>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full min-w-[760px] text-sm">
@@ -191,6 +227,7 @@ function SavedFilters({ current }: { current: Conditions }) {
     if (filters.some((f) => f.name === name)) return;
     const conditions: Record<string, string> = { metric: current.metric, order: current.order };
     if (current.pref) conditions.pref = current.pref;
+    if (current.includeReference) conditions.ref = "1";
     saveFilters([...filters, { name, conditions }].slice(-MAX_FILTERS));
   };
 
@@ -210,6 +247,7 @@ function SavedFilters({ current }: { current: Conditions }) {
                 metric: String(filter.conditions.metric ?? ""),
                 order: String(filter.conditions.order ?? ""),
                 pref: String(filter.conditions.pref ?? ""),
+                ref: String(filter.conditions.ref ?? ""),
               })
             }
           >
