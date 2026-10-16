@@ -4,7 +4,7 @@ import { type ComponentType, useId, useState } from "react";
 import { Bar, Eyebrow } from "@/components/brand";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { dataset, METRICS, type MetricKey, rankableAreas, sortAreas } from "@/data";
+import { dataset, METRICS, type MetricKey, metricPeriod, rankableAreas, sortAreas } from "@/data";
 import { formatMetric } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { areaPath } from "@/routes";
@@ -91,7 +91,9 @@ export function HomePage() {
             <Card key={key}>
               <CardHeader>
                 <CardTitle className="text-base">{title}</CardTitle>
-                <CardDescription>{METRICS[key].label}</CardDescription>
+                <CardDescription>
+                  {METRICS[key].label}・{metricPeriod(key)}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <TopList

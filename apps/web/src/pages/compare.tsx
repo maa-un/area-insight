@@ -9,7 +9,7 @@ import { ArrowUpRight, Columns3, X } from "lucide-react";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { findArea, METRICS, type MetricKey } from "@/data";
+import { findArea, METRICS, type MetricKey, metricPeriod } from "@/data";
 import { formatCount, formatMetric } from "@/lib/format";
 import { propfolioUrl } from "@/lib/propfolio";
 import { replaceSearchParams, useSearchParams } from "@/lib/search-params";
@@ -132,6 +132,7 @@ export function ComparePage() {
                       className="px-4 py-3 text-left font-normal text-muted-foreground"
                     >
                       {METRICS[key].label}
+                      <span className="block text-[11px]">{metricPeriod(key)}</span>
                     </th>
                     {areas.map((area) => (
                       <td

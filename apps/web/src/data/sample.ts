@@ -438,7 +438,10 @@ const SEEDS: Seed[] = [
   },
 ];
 
-export const SAMPLE_AS_OF = "2026-09-30";
+// 最新の四半期が 2026Q3（QUARTERS の末尾）。取引の期間はその直近 4 四半期
+export const SAMPLE_UPDATED_AT = "2026-10-16";
+const SAMPLE_TRADE_PERIOD = { from: "2025-10-01", to: "2026-09-30" };
+const SAMPLE_SURVEY = { source: "housing_survey", period: null, asOf: "2023-10-01" } as const;
 
 // level を中心に ±spread の幅で広がる 21 個の分位（0%〜100%、5% 刻み）。100 円単位に丸める。
 function quantilesAround(level: number, spread: number): number[] {
@@ -485,7 +488,14 @@ function metricsFor(seed: Seed): AreaMetrics {
 }
 
 export const sampleMetrics: AreaMetricsFile = {
-  asOf: SAMPLE_AS_OF,
+  updatedAt: SAMPLE_UPDATED_AT,
+  sources: {
+    tradePrice: { source: "XIT001", period: SAMPLE_TRADE_PERIOD, asOf: null },
+    vacancyRate: SAMPLE_SURVEY,
+    monthlyRent: SAMPLE_SURVEY,
+    population: { source: "resident_register", period: null, asOf: "2026-01-01" },
+    stations: { source: "XPT001", period: SAMPLE_TRADE_PERIOD, asOf: null },
+  },
   sample: true,
   areas: SEEDS.map(metricsFor),
 };

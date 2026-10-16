@@ -6,6 +6,13 @@ import {
   RELIABLE_TRADE_COUNT,
   StationMetricsList,
 } from "@area-insight/shared";
+import {
+  formatDataPeriod,
+  formatPopulationChange,
+  STALE_NOTE,
+  STALE_YEARS,
+  yearsApart,
+} from "@/lib/period";
 import { sampleLandPrices, sampleMetrics, sampleStations } from "./sample";
 
 // 画面が使うデータの入口。ビルド前に scripts/prepare-data.mjs が集計ジョブの書き出しを
@@ -41,6 +48,30 @@ export const METRICS = {
   population: { label: "人口", unit: "人", better: "high" },
 } as const satisfies Record<string, { label: string; unit: string; better: "low" | "high" }>;
 export type MetricKey = keyof typeof METRICS;
+
+// 指標の時点。すべての数字のそばに短く出す（仕様書「時点の表示ルール」）。
+// 利回りは家賃（調査年）と取引（期間）の組み合わせなので、根拠の両方を並べる。
+export function metricPeriod(key: MetricKey): string {
+  const { tradePrice, vacancyRate, monthlyRent, population } = dataset.sources;
+  switch (key) {
+    case "tradePrice":
+      return formatDataPeriod(tradePrice);
+    case "grossYield":
+      return `家賃 ${formatDataPeriod(monthlyRent)}・取引 ${formatDataPeriod(tradePrice)}`;
+    case "vacancyRate":
+      return formatDataPeriod(vacancyRate);
+    case "populationChangeRate":
+      return formatPopulationChange(population);
+    case "population":
+      return formatDataPeriod(population);
+  }
+}
+
+// 利回りの根拠（家賃と取引価格）の時点が 2 年以上離れていれば注記する。
+export function yieldPeriodNote(): string | null {
+  const { tradePrice, monthlyRent } = dataset.sources;
+  return yearsApart(monthlyRent, tradePrice) >= STALE_YEARS ? STALE_NOTE : null;
+}
 
 export function isMetricKey(value: string | null): value is MetricKey {
   return value !== null && Object.hasOwn(METRICS, value);

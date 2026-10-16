@@ -144,9 +144,44 @@ export function metricsSql(dataset: string): MetricsSql {
     SELECT
       joined.*,
       -- 想定表面利回り = 家賃相場 × 12 ÷ 取引価格。物件ごとではなくエリアの目安
-      ROUND(SAFE_DIVIDE(monthly_rent * 12, trade_price * 10000) * 100, 1) AS gross_yield,
-      LAST_DAY(DATE_ADD((SELECT quarter FROM latest), INTERVAL 2 MONTH)) AS as_of
+      ROUND(SAFE_DIVIDE(monthly_rent * 12, trade_price * 10000) * 100, 1) AS gross_yield
     FROM joined`;
+
+  // 指標ごとの出典と時点（packages/shared の DataSources）。画面はすべての数字のそばに時点を出す。
+  //   取引: 直近 RECENT_MONTHS か月の四半期の初日〜最新の四半期の末日
+  //   住宅・土地統計調査: time_code の年の 10 月 1 日時点  住民基本台帳人口: 最新年の 1 月 1 日時点
+  //   駅ごとの取引相場: 取り込んだ範囲（取得ジョブが直近 4 四半期を取り直す）
+  const dataSources = `
+    CREATE OR REPLACE TABLE ${t("data_sources")} AS
+    WITH latest AS (SELECT MAX(period_start) AS quarter FROM ${t("raw_transactions")}),
+    survey AS (
+      SELECT table_name, DATE(CAST(SUBSTR(MAX(time_code), 1, 4) AS INT64), 10, 1) AS as_of
+      FROM ${t("raw_statistics")} WHERE table_name IN ('housing_vacancy', 'private_rent_per_sqm')
+      GROUP BY table_name
+    ),
+    population AS (
+      SELECT DATE(MAX(CAST(SUBSTR(time_code, 1, 4) AS INT64)), 1, 1) AS as_of
+      FROM ${t("raw_statistics")}
+      WHERE table_name = 'resident_population' AND SAFE_CAST(value AS FLOAT64) IS NOT NULL
+    ),
+    stations AS (
+      -- period_to は最後の四半期の初日で入っている（raw-rows.ts）ため、その四半期の末日にする
+      SELECT MIN(period_from) AS period_from, LAST_DAY(DATE_ADD(MAX(period_to), INTERVAL 2 MONTH)) AS period_to
+      FROM ${t("raw_station_transactions")}
+    )
+    SELECT 'tradePrice' AS metric, 'XIT001' AS source,
+      DATE_SUB(quarter, INTERVAL ${RECENT_MONTHS - 3} MONTH) AS period_from,
+      LAST_DAY(DATE_ADD(quarter, INTERVAL 2 MONTH)) AS period_to,
+      CAST(NULL AS DATE) AS as_of
+    FROM latest
+    UNION ALL
+    SELECT 'vacancyRate', 'housing_survey', NULL, NULL, as_of FROM survey WHERE table_name = 'housing_vacancy'
+    UNION ALL
+    SELECT 'monthlyRent', 'housing_survey', NULL, NULL, as_of FROM survey WHERE table_name = 'private_rent_per_sqm'
+    UNION ALL
+    SELECT 'population', 'resident_register', NULL, NULL, as_of FROM population
+    UNION ALL
+    SELECT 'stations', 'XPT001', period_from, period_to, NULL FROM stations`;
 
   const areaDetails = `
     CREATE OR REPLACE TABLE ${t("area_details")} AS
@@ -307,9 +342,17 @@ export function metricsSql(dataset: string): MetricsSql {
     FROM stats, period`;
 
   return {
-    rebuild: [areaMetrics, areaDetails, districtLandPrices, landPricePoints, stationMetrics],
+    rebuild: [
+      areaMetrics,
+      areaDetails,
+      districtLandPrices,
+      landPricePoints,
+      stationMetrics,
+      dataSources,
+    ],
     exports: (bucket, exportId) =>
       [
+        "data_sources",
         "area_metrics",
         "area_details",
         "district_land_prices",
