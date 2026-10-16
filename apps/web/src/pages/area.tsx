@@ -1,7 +1,8 @@
 import { type AreaDetail, prefectureName, RELIABLE_TRADE_COUNT } from "@area-insight/shared";
-import { ArrowUpRight, ChevronRight, Map as MapIcon } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Map as MapIcon, MapPin } from "lucide-react";
+import type { CSSProperties } from "react";
 import { AreaActions } from "@/components/area-actions";
-import { Chip, Eyebrow, PositionBar } from "@/components/brand";
+import { Chip, CountUp, PositionBar } from "@/components/brand";
 import { LandPriceSection } from "@/components/land-prices";
 import { MarketDistortionSection } from "@/components/market-distortion";
 import { StationLandPriceSection } from "@/components/station-land-prices";
@@ -49,29 +50,42 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
 
   return (
     <article className="flex flex-col gap-8">
-      <nav aria-label="パンくず" className="flex items-center gap-1 text-sm text-muted-foreground">
-        <a href="/" className="hover:text-foreground">
+      <nav
+        aria-label="パンくず"
+        className="flex items-center gap-1 text-xs text-muted-foreground animate-rise"
+      >
+        <a href="/" className="transition-colors hover:text-foreground">
           トップ
         </a>
         <ChevronRight className="size-3.5" aria-hidden />
-        <a href={`/rankings/?pref=${area.prefectureCode}`} className="hover:text-foreground">
+        <a
+          href={`/rankings/?pref=${area.prefectureCode}`}
+          className="transition-colors hover:text-foreground"
+        >
           {prefecture}
         </a>
         <ChevronRight className="size-3.5" aria-hidden />
         <span className="text-foreground">{area.name}</span>
       </nav>
 
-      <header className="flex flex-col gap-5">
+      <header className="relative isolate flex flex-col gap-6 overflow-hidden rounded-3xl border bg-card p-6 animate-rise sm:p-8">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute -top-20 -right-10 size-72 animate-float rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute -bottom-24 left-1/3 size-72 animate-float rounded-full bg-amber-300/20 blur-3xl [animation-delay:-6s]" />
+        </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col gap-2">
-            <Eyebrow>{prefecture}</Eyebrow>
-            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{area.name}</h1>
+            <p className="inline-flex w-fit items-center gap-1.5 rounded-full border bg-background/70 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+              <MapPin className="size-3 text-primary" aria-hidden />
+              {prefecture}
+            </p>
+            <h1 className="text-4xl font-extrabold sm:text-5xl">{area.name}</h1>
             <p className="text-muted-foreground">中古戸建・空き家の相場と、土地の高い・安い</p>
           </div>
           <AreaActions code={area.code} />
         </div>
         {verdict && (
-          <div className="flex flex-col gap-3 rounded-xl border border-terracotta/30 bg-card p-5">
+          <div className="flex flex-col gap-3 rounded-2xl border border-primary/25 bg-background/70 p-5 backdrop-blur">
             <p className="text-lg font-bold leading-snug sm:text-xl">{verdict.sentence}</p>
             <div className="flex flex-wrap gap-2">
               {verdict.tags.map((tag) => (
@@ -85,14 +99,18 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
       </header>
 
       <section aria-label="主な指標" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {SUMMARY.map(({ key, note }) => {
+        {SUMMARY.map(({ key, note }, i) => {
           const rank = prefectureRank(area, key);
           return (
-            <Card key={key} className="gap-2 py-4">
+            <Card
+              key={key}
+              className="stagger gap-2 py-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5"
+              style={{ "--i": i + 1 } as CSSProperties}
+            >
               <CardHeader className="px-4">
                 <CardDescription>{METRICS[key].label}</CardDescription>
-                <CardTitle className="flex items-center gap-2 text-3xl font-semibold tabular-nums">
-                  {formatMetric(key, area[key])}
+                <CardTitle className="flex items-center gap-2 text-3xl font-bold tracking-tight tabular-nums">
+                  <CountUp text={formatMetric(key, area[key])} />
                   {key === "tradePrice" && reference && area.tradePrice !== null && (
                     <Badge variant="outline">参考値</Badge>
                   )}
@@ -121,17 +139,23 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         })}
       </section>
 
-      <LandPriceSection
-        areaName={area.name}
-        landPrices={detail.landPrices}
-        official={detail.officialLandPrices}
-      />
+      <div className="reveal">
+        <LandPriceSection
+          areaName={area.name}
+          landPrices={detail.landPrices}
+          official={detail.officialLandPrices}
+        />
+      </div>
 
-      <StationLandPriceSection areaName={area.name} stations={detail.stationLandPrices} />
+      <div className="reveal">
+        <StationLandPriceSection areaName={area.name} stations={detail.stationLandPrices} />
+      </div>
 
-      <MarketDistortionSection area={area} prefecture={prefecture} />
+      <div className="reveal">
+        <MarketDistortionSection area={area} prefecture={prefecture} />
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="reveal grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>取引価格の推移</CardTitle>
@@ -144,7 +168,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         </Card>
 
         <div className="flex flex-col gap-6">
-          <Card className="border-primary/20 bg-primary/[0.03]">
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-primary to-[oklch(0.5_0.15_32)] text-primary-foreground shadow-lg shadow-primary/20 ring-0 [&_[data-slot=card-description]]:text-primary-foreground/80">
             <CardHeader>
               <CardTitle>この相場で収支を計算する</CardTitle>
               <CardDescription>
@@ -159,7 +183,11 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button asChild className="w-full">
+              <Button
+                asChild
+                variant="secondary"
+                className="group/cta h-10 w-full bg-white text-primary hover:bg-white/90"
+              >
                 <a href={propfolioUrl(area)} target="_blank" rel="noopener">
                   PropFolio で計算する
                   <ArrowUpRight />
@@ -209,15 +237,18 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
               <CardTitle>近くの市区町村</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <ul className="flex flex-col gap-2 text-sm">
+              <ul className="flex flex-col gap-0.5 text-sm">
                 {nearbyAreas(area).map((other) => (
-                  <li key={other.code} className="flex justify-between gap-2">
-                    <a href={areaPath(other.code)} className="truncate hover:underline">
-                      {other.name}
+                  <li key={other.code}>
+                    <a
+                      href={areaPath(other.code)}
+                      className="-mx-2 flex justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="truncate font-medium">{other.name}</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatManYen(other.tradePrice)}
+                      </span>
                     </a>
-                    <span className="tabular-nums text-muted-foreground">
-                      {formatManYen(other.tradePrice)}
-                    </span>
                   </li>
                 ))}
               </ul>
@@ -232,7 +263,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         </div>
       </div>
 
-      <Card>
+      <Card className="reveal">
         <CardHeader>
           <CardTitle>直近の取引</CardTitle>
           <CardDescription>

@@ -1,7 +1,15 @@
 import { prefectureName } from "@area-insight/shared";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, MapIcon, MousePointerClick } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   dataset,
   findArea,
@@ -123,29 +131,36 @@ export function MapPage() {
   }, [ready, visible]);
 
   return (
-    <div className="flex flex-col lg:h-[calc(100svh-3.5rem-2.5rem)] lg:flex-row">
-      <aside className="order-2 flex flex-col gap-6 border-t p-4 lg:order-1 lg:w-80 lg:overflow-y-auto lg:border-t-0 lg:border-r">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight">地図で探す</h1>
+    <div className="flex flex-col lg:h-svh lg:flex-row">
+      <aside className="order-2 flex flex-col gap-6 border-t bg-background p-5 lg:order-1 lg:w-80 lg:overflow-y-auto lg:border-t-0 lg:border-r">
+        <div className="animate-rise">
+          <p className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span className="flex size-6 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <MapIcon className="size-3.5" />
+            </span>
+            地図
+          </p>
+          <h1 className="text-xl">地図で探す</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             拡大すると、地価の地点と駅ごとの取引相場が表示されます。
           </p>
         </div>
 
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        <div className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
           色分けする指標
-          <select
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs"
-            value={metric}
-            onChange={(e) => replaceSearchParams({ metric: e.target.value })}
-          >
-            {AREA_METRICS.map((key) => (
-              <option key={key} value={key}>
-                {METRICS[key].label}
-              </option>
-            ))}
-          </select>
-        </label>
+          <Select value={metric} onValueChange={(value) => replaceSearchParams({ metric: value })}>
+            <SelectTrigger className="h-9 w-full bg-card" aria-label="色分けする指標">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AREA_METRICS.map((key) => (
+                <SelectItem key={key} value={key}>
+                  {METRICS[key].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <Legend
           title={METRICS[metric].label}
@@ -153,14 +168,19 @@ export function MapPage() {
         />
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-xs text-muted-foreground">表示するもの</legend>
+          <legend className="mb-1 text-xs font-medium text-muted-foreground">表示するもの</legend>
           {LAYERS.map((layer) => (
-            <label key={layer.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
+            <label
+              key={layer.id}
+              htmlFor={`layer-${layer.id}`}
+              className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-sm transition-colors hover:border-primary/40 has-data-[state=unchecked]:text-muted-foreground"
+            >
+              <Checkbox
+                id={`layer-${layer.id}`}
                 checked={visible[layer.id]}
-                onChange={(e) => setVisible((v) => ({ ...v, [layer.id]: e.target.checked }))}
+                onCheckedChange={(checked) =>
+                  setVisible((v) => ({ ...v, [layer.id]: checked === true }))
+                }
               />
               <span
                 className={cn(
@@ -180,14 +200,17 @@ export function MapPage() {
       <div className="relative order-1 h-[60svh] lg:order-2 lg:h-auto lg:flex-1">
         <div ref={container} className="h-full w-full" aria-label="地図" role="application" />
         {!ready && (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted/40 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
-            地図を読み込んでいます
+          <div className="absolute inset-0 flex items-center justify-center overflow-hidden bg-muted/40 text-sm text-muted-foreground">
+            <div className="absolute inset-0 animate-pulse bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:48px_48px]" />
+            <span className="relative flex items-center rounded-full border bg-background/90 px-4 py-2 shadow-sm backdrop-blur">
+              <Loader2 className="mr-2 size-4 animate-spin text-primary" aria-hidden />
+              地図を読み込んでいます
+            </span>
           </div>
         )}
         {ready && areasStatus !== "loaded" && visible.areas && (
           <p
-            className="absolute top-3 left-3 flex items-center rounded-md bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow"
+            className="absolute top-3 left-3 flex items-center rounded-full border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur animate-in fade-in slide-in-from-top-2"
             role="status"
           >
             {areasStatus === "loading" ? (
@@ -234,19 +257,21 @@ function Legend({ title, labels }: { title: string; labels: string[] }) {
 function SelectionCard({ selection, metric }: { selection: Selection | null; metric: MetricKey }) {
   if (!selection) {
     return (
-      <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+      <p className="flex flex-col items-center gap-2 rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <MousePointerClick className="size-5 animate-bounce text-primary" aria-hidden />
         地図上の市区町村や地点を押すと、ここに値が表示されます。
       </p>
     );
   }
   const p = selection.properties;
-  const box = "flex flex-col gap-2 rounded-lg border p-4 text-sm";
+  const box =
+    "flex flex-col gap-2 rounded-2xl border bg-card p-4 text-sm shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300";
 
   if (selection.layer === "areas") {
     const area = findArea(String(p.code));
     if (!area) return null;
     return (
-      <div className={box}>
+      <div key={area.code} className={box}>
         <p className="text-xs text-muted-foreground">{prefectureName(area.prefectureCode)}</p>
         <p className="text-lg font-semibold">{area.name}</p>
         <dl className="grid grid-cols-2 gap-y-1 tabular-nums">

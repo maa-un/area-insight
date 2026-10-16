@@ -5,10 +5,11 @@ import {
   prefectureName,
   RELIABLE_TRADE_COUNT,
 } from "@area-insight/shared";
-import { ArrowUpRight, Columns3, X } from "lucide-react";
+import { ArrowUpRight, Columns3, Plus, Trophy, X } from "lucide-react";
 import { useEffect } from "react";
+import { PageHeader } from "@/components/brand";
+import { openSearch } from "@/components/search-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { findArea, METRICS, type MetricKey, metricPeriod } from "@/data";
 import { formatCount, formatMetric } from "@/lib/format";
 import { propfolioUrl } from "@/lib/propfolio";
@@ -61,39 +62,54 @@ export function ComparePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">比較</h1>
-        <p className="text-muted-foreground">
-          市区町村を {MAX_COMPARE} つまで横に並べて比べます。良い方の値を太字にしています。
-        </p>
-      </header>
+      <PageHeader
+        icon={Columns3}
+        eyebrow={`${areas.length} / ${MAX_COMPARE}`}
+        title="比較"
+        description={`市区町村を ${MAX_COMPARE} つまで横に並べて比べます。良い方の値を色付きの太字にしています。`}
+      />
 
       {areas.length === 0 ? (
-        <Card className="items-center py-12 text-center">
-          <CardHeader className="items-center">
-            <Columns3 className="mx-auto size-8 text-muted-foreground" aria-hidden />
-            <CardTitle className="mt-2">比較する市区町村がありません</CardTitle>
-            <CardDescription>
+        <div className="relative flex flex-col items-center gap-4 overflow-hidden rounded-3xl border border-dashed bg-card px-6 py-16 text-center animate-rise [animation-delay:80ms]">
+          <div className="relative">
+            <span className="absolute inset-0 animate-ping rounded-2xl bg-primary/20 [animation-duration:2.4s]" />
+            <span className="relative flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Columns3 className="size-7" aria-hidden />
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg">比較する市区町村がありません</h2>
+            <p className="text-sm text-muted-foreground">
               市区町村ページやランキングの「比較に追加」から選んでください。
-            </CardDescription>
-          </CardHeader>
-          <Button asChild variant="outline">
-            <a href="/rankings/">ランキングから選ぶ</a>
-          </Button>
-        </Card>
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button onClick={openSearch}>
+              <Plus />
+              市区町村を探す
+            </Button>
+            <Button asChild variant="outline">
+              <a href="/rankings/">ランキングから選ぶ</a>
+            </Button>
+          </div>
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="overflow-x-auto rounded-2xl border bg-card animate-rise [animation-delay:80ms]">
           <table className="w-full min-w-[560px] table-fixed text-sm">
             <thead>
-              <tr className="bg-muted/50">
+              <tr className="bg-muted/40">
                 <th className="w-40 px-4 py-3 text-left font-medium text-muted-foreground">指標</th>
-                {areas.map((area) => (
-                  <th key={area.code} className="px-4 py-3 text-left align-top">
+                {areas.map((area, i) => (
+                  <th
+                    key={area.code}
+                    className="px-4 py-3 text-left align-top animate-in fade-in slide-in-from-top-2 fill-mode-both duration-500"
+                    style={{ animationDelay: `${i * 80}ms` }}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <a
                           href={areaPath(area.code)}
-                          className="text-base font-semibold hover:underline"
+                          className="text-base font-bold transition-colors hover:text-primary"
                         >
                           {area.name}
                         </a>
@@ -115,9 +131,14 @@ export function ComparePage() {
                 ))}
                 {SLOTS.slice(areas.length).map((slot) => (
                   <th key={slot} className="px-4 py-3 text-left font-normal text-muted-foreground">
-                    <a href="/rankings/" className="text-xs hover:text-foreground">
-                      ＋ 追加する
-                    </a>
+                    <button
+                      type="button"
+                      onClick={openSearch}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed py-2 text-xs transition-colors hover:border-primary/50 hover:bg-accent hover:text-primary"
+                    >
+                      <Plus className="size-3.5" />
+                      追加する
+                    </button>
                   </th>
                 ))}
               </tr>
@@ -126,7 +147,7 @@ export function ComparePage() {
               {ROWS.map((key) => {
                 const top = best(key, areas);
                 return (
-                  <tr key={key} className="border-t">
+                  <tr key={key} className="border-t transition-colors hover:bg-muted/30">
                     <th
                       scope="row"
                       className="px-4 py-3 text-left font-normal text-muted-foreground"
@@ -142,7 +163,15 @@ export function ComparePage() {
                           area[key] === top && "font-bold text-terracotta",
                         )}
                       >
-                        {formatMetric(key, area[key])}
+                        <span className="inline-flex items-center gap-1.5">
+                          {formatMetric(key, area[key])}
+                          {area[key] === top && (
+                            <Trophy
+                              className="size-3.5 animate-in zoom-in"
+                              aria-label="最も良い値"
+                            />
+                          )}
+                        </span>
                       </td>
                     ))}
                     {SLOTS.slice(areas.length).map((slot) => (
