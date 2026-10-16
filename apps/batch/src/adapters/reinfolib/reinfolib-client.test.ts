@@ -58,4 +58,56 @@ describe("ReinfolibClient", () => {
     const fetchFn = vi.fn(async () => Response.json({ data: [{ id: 13101 }] }));
     await expect(client(fetchFn as typeof fetch).municipalities("13")).rejects.toThrow();
   });
+
+  it("reads land price points from GeoJSON and keeps their properties", async () => {
+    const fetchFn = vi.fn(async () =>
+      Response.json({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [137.97, 36.23] },
+            properties: { point_id: "p1", u_current_years_price_ja: "88,300(円/㎡)" },
+          },
+        ],
+      }),
+    );
+    const points = await client(fetchFn as typeof fetch).landPrices(
+      { z: 13, x: 7210, y: 3200 },
+      2026,
+      "0",
+    );
+
+    expect(points).toEqual([
+      {
+        coordinates: [137.97, 36.23],
+        properties: { point_id: "p1", u_current_years_price_ja: "88,300(円/㎡)" },
+      },
+    ]);
+    const url = new URL((fetchFn.mock.calls as unknown as [string][])[0]?.[0] ?? "");
+    expect(url.pathname).toMatch(/XPT002$/);
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({
+      z: "13",
+      x: "7210",
+      y: "3200",
+      year: "2026",
+      priceClassification: "0",
+      response_format: "geojson",
+    });
+  });
+
+  it("treats an empty array as a tile without data", async () => {
+    const fetchFn = vi.fn(async () => Response.json([]));
+    const quarter = { year: 2026, quarter: 1 } as const;
+    expect(
+      await client(fetchFn as typeof fetch).stationTransactions(
+        { z: 11, x: 1, y: 1 },
+        quarter,
+        quarter,
+      ),
+    ).toEqual([]);
+    const url = new URL((fetchFn.mock.calls as unknown as [string][])[0]?.[0] ?? "");
+    expect(url.searchParams.get("from")).toBe("20261");
+    expect(url.searchParams.get("landTypeCode")).toBe("02");
+  });
 });

@@ -1,10 +1,23 @@
-import type { MunicipalityRecord, RawDataStore, TransactionRecord } from "../../ports.js";
+import type {
+  MunicipalityRecord,
+  PointRecord,
+  RawDataStore,
+  StatisticRecord,
+  StatisticsTable,
+  TransactionRecord,
+} from "../../ports.js";
 import { type Quarter, quarterStartDate } from "../../quarters.js";
 import type { BigQueryWriter } from "./bigquery-writer.js";
 import {
+  landPriceRow,
   municipalityRow,
+  RAW_LAND_PRICES,
   RAW_MUNICIPALITIES,
+  RAW_STATION_TRANSACTIONS,
+  RAW_STATISTICS,
   RAW_TRANSACTIONS,
+  stationTransactionRow,
+  statisticRow,
   transactionRow,
 } from "./raw-rows.js";
 
@@ -32,6 +45,39 @@ export class BigQueryRawStore implements RawDataStore {
       RAW_TRANSACTIONS,
       rows.map((row) => transactionRow(row.record, quarter, row.prefectureCode, fetchedAt)),
       quarterStartDate(quarter).replaceAll("-", ""),
+    );
+  }
+
+  async replaceLandPrices(
+    year: number,
+    rows: readonly { classification: "0" | "1"; record: PointRecord }[],
+    fetchedAt: Date,
+  ): Promise<void> {
+    await this.writer.replace(
+      RAW_LAND_PRICES,
+      rows.map((row) => landPriceRow(row.record, year, row.classification, fetchedAt)),
+      `${year}0101`,
+    );
+  }
+
+  async replaceStationTransactions(
+    period: { from: Quarter; to: Quarter },
+    rows: readonly PointRecord[],
+    fetchedAt: Date,
+  ): Promise<void> {
+    await this.writer.replace(
+      RAW_STATION_TRANSACTIONS,
+      rows.map((row) => stationTransactionRow(row, period.from, period.to, fetchedAt)),
+    );
+  }
+
+  async replaceStatistics(
+    rows: readonly { table: StatisticsTable; record: StatisticRecord }[],
+    fetchedAt: Date,
+  ): Promise<void> {
+    await this.writer.replace(
+      RAW_STATISTICS,
+      rows.map((row) => statisticRow(row.table, row.record, fetchedAt)),
     );
   }
 }
