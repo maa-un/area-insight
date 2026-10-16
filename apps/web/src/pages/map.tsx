@@ -23,6 +23,7 @@ import {
 } from "@/lib/format";
 import type { LayerId, MapController, Selection } from "@/lib/map-engine";
 import { NO_DATA_COLOR, quantileScale, SCALE_COLORS, STATION_COLOR } from "@/lib/map-scale";
+import { formatDataPeriod } from "@/lib/period";
 import { replaceSearchParams, useSearchParams } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { areaPath } from "@/routes";
@@ -317,6 +318,7 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
       <p className="text-muted-foreground">
         取引総額の中央値・取引 {formatCount(Number(p.count), "件")}
       </p>
+      <p className="text-muted-foreground">{formatDataPeriod(dataset.sources.stations)}</p>
     </div>
   );
 }

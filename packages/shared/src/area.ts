@@ -19,32 +19,6 @@ export const DistortionGap = z.number().min(-100).max(100);
 // 「歪みあり」とする順位の差（仕様書の推奨値。実データの分布を見て確定する）。
 export const DISTORTION_THRESHOLD = 40;
 
-// 指標ごとの元データの時点。期間のデータ（取引）は from〜to、時点のデータ（地価、統計）は to だけを持つ。
-//   quarter: 四半期の範囲（from は最初の四半期の初日、to は最後の四半期の末日）
-//   day: その日の時点（公示地価は 1 月 1 日、基準地価は 7 月 1 日）
-//   year: その年の値（統計。調査日は統計ごとに違うため年だけ示す）
-export const DataPeriod = z.object({
-  source: z.string().min(1), // 画面に出す出典の名前
-  from: z.iso.date().nullable(),
-  to: z.iso.date(),
-  precision: z.enum(["quarter", "day", "year"]),
-});
-export type DataPeriod = z.infer<typeof DataPeriod>;
-
-export const DATA_PERIOD_KEYS = [
-  "trade", // 中古戸建の取引（直近 4 四半期）
-  "landTrade", // 土地の取引（直近 8 四半期）
-  "officialLandPrice", // 地価公示
-  "prefectureLandPrice", // 都道府県地価調査（基準地価）
-  "vacancy", // 空き家率
-  "rent", // 家賃
-  "population", // 人口
-  "stationTrade", // 駅ごとの取引（土地と建物）
-  "stationLandTrade", // 駅ごとの土地の取引
-] as const;
-export const DataPeriodKey = z.enum(DATA_PERIOD_KEYS);
-export type DataPeriodKey = z.infer<typeof DataPeriodKey>;
-
 // 市区町村の指標一覧（全国 1 ファイル）の 1 行。値が無い指標は null。
 export const AreaMetrics = z.object({
   code: MunicipalityCode,
@@ -90,10 +64,47 @@ export const AreaMetrics = z.object({
 });
 export type AreaMetrics = z.infer<typeof AreaMetrics>;
 
+// 指標の元データ。画面はすべての数字のそばに「いつ時点のデータか」を出す（仕様書「時点の表示ルール」）。
+//   XIT001: 不動産取引価格情報（市区町村の取引）  XPT001: 同（地点。駅ごとの取引相場）
+//   housing_survey: 住宅・土地統計調査（空き家率・家賃。5 年ごと、10 月 1 日時点）
+//   resident_register: 住民基本台帳人口（1 月 1 日時点）
+//   official_land_price: 地価公示（1 月 1 日時点）  prefecture_land_price: 都道府県地価調査（基準地価、7 月 1 日時点）
+export const DataSourceKey = z.enum([
+  "XIT001",
+  "XPT001",
+  "housing_survey",
+  "resident_register",
+  "official_land_price",
+  "prefecture_land_price",
+]);
+export type DataSourceKey = z.infer<typeof DataSourceKey>;
+
+// 期間のデータは period（取引なら始まりと終わりの四半期の初日・末日）、時点のデータは asOf を持つ。
+export const DataPeriod = z.object({
+  source: DataSourceKey,
+  period: z.object({ from: z.iso.date(), to: z.iso.date() }).nullable(),
+  asOf: z.iso.date().nullable(),
+});
+export type DataPeriod = z.infer<typeof DataPeriod>;
+
+// 指標ごとの出典と時点。市区町村ごとに繰り返さず、ファイルの頭に 1 つ置く。
+export const DataSources = z.object({
+  tradePrice: DataPeriod, // 取引価格と件数、推移の最新の四半期
+  vacancyRate: DataPeriod,
+  monthlyRent: DataPeriod, // 家賃の ㎡単価の時点。延床面積は tradePrice の期間の取引から
+  population: DataPeriod, // 人口と 5 年増減率の「最新年」
+  stations: DataPeriod, // 駅ごとの取引相場（直近 4 四半期）
+  landTrade: DataPeriod, // 土地の取引単価（直近 8 四半期）。地区ごとの分布、取引 ÷ 公示地価、歪み
+  officialLandPrice: DataPeriod, // 地価公示の最新年。取り込む前は asOf が null
+  prefectureLandPrice: DataPeriod, // 地価調査の最新年。取り込む前は asOf が null
+  stationLandTrade: DataPeriod, // 駅ごとの土地の坪単価（直近 8 四半期）
+});
+export type DataSources = z.infer<typeof DataSources>;
+
 export const AreaMetricsFile = z.object({
-  // データを更新した日（集計ジョブを動かした日）。各指標の元データの時点は periods に持つ
+  // 集計を動かした日。フッターの「データの更新日」
   updatedAt: z.iso.date(),
-  periods: z.partialRecord(DataPeriodKey, DataPeriod),
+  sources: DataSources,
   sample: z.boolean(),
   areas: z.array(AreaMetrics),
 });

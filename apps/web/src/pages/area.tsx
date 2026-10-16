@@ -2,7 +2,6 @@ import { type AreaDetail, prefectureName, RELIABLE_TRADE_COUNT } from "@area-ins
 import { ArrowUpRight, ChevronRight, Map as MapIcon } from "lucide-react";
 import { AreaActions } from "@/components/area-actions";
 import { Chip, Eyebrow, PositionBar } from "@/components/brand";
-import { DataPeriodNote } from "@/components/data-period";
 import { LandPriceSection } from "@/components/land-prices";
 import { MarketDistortionSection } from "@/components/market-distortion";
 import { StationLandPriceSection } from "@/components/station-land-prices";
@@ -10,7 +9,16 @@ import { TrendChart, yearName } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { findArea, METRICS, type MetricKey, nearbyAreas, prefectureRank } from "@/data";
+import {
+  dataset,
+  findArea,
+  METRICS,
+  type MetricKey,
+  metricPeriod,
+  nearbyAreas,
+  prefectureRank,
+  yieldPeriodNote,
+} from "@/data";
 import {
   formatCount,
   formatManYen,
@@ -19,12 +27,14 @@ import {
   formatQuarter,
   NO_DATA,
 } from "@/lib/format";
+import { formatDataPeriod } from "@/lib/period";
 import { propfolioUrl } from "@/lib/propfolio";
 import { areaVerdict } from "@/lib/verdict";
 import { areaPath } from "@/routes";
 
+// 各指標の説明と時点。時点はすべての数字のそばに出す（仕様書「時点の表示ルール」）。
 const SUMMARY: { key: MetricKey; note: string }[] = [
-  { key: "tradePrice", note: "直近 4 四半期の宅地（土地と建物）の取引" },
+  { key: "tradePrice", note: "宅地（土地と建物）の取引価格の中央値" },
   { key: "grossYield", note: "家賃相場 × 12 ÷ 取引価格。エリアの目安" },
   { key: "vacancyRate", note: "空き家数 ÷ 住宅総数" },
   { key: "populationChangeRate", note: "過去 5 年の増減" },
@@ -55,7 +65,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col gap-2">
             <Eyebrow>{prefecture}</Eyebrow>
-            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">{area.name}</h1>
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{area.name}</h1>
             <p className="text-muted-foreground">中古戸建・空き家の相場と、土地の高い・安い</p>
           </div>
           <AreaActions code={area.code} />
@@ -81,7 +91,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
             <Card key={key} className="gap-2 py-4">
               <CardHeader className="px-4">
                 <CardDescription>{METRICS[key].label}</CardDescription>
-                <CardTitle className="flex items-center gap-2 text-3xl font-extrabold tabular-nums">
+                <CardTitle className="flex items-center gap-2 text-3xl font-semibold tabular-nums">
                   {formatMetric(key, area[key])}
                   {key === "tradePrice" && reference && area.tradePrice !== null && (
                     <Badge variant="outline">参考値</Badge>
@@ -90,8 +100,11 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
               </CardHeader>
               <CardContent className="flex flex-col gap-1 px-4 text-xs text-muted-foreground">
                 <p>{note}</p>
+                <p>{metricPeriod(key)}</p>
+                {key === "grossYield" && yieldPeriodNote() && (
+                  <p className="text-bad">{yieldPeriodNote()}</p>
+                )}
                 {key === "tradePrice" && <p>取引件数 {formatCount(area.tradeCount, "件")}</p>}
-                <DataPeriodNote sources={METRICS[key].sources} />
                 {rank && (
                   <div className="flex flex-col gap-1.5">
                     <p>
@@ -135,13 +148,15 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
             <CardHeader>
               <CardTitle>この相場で収支を計算する</CardTitle>
               <CardDescription>
-                取引価格 {formatManYen(area.tradePrice)}・家賃相場{" "}
+                取引価格 {formatManYen(area.tradePrice)}（
+                {formatDataPeriod(dataset.sources.tradePrice)}
+                ）・家賃相場{" "}
                 {area.monthlyRent === null
                   ? NO_DATA
-                  : `${area.monthlyRent.toLocaleString("ja-JP")}円/月`}{" "}
-                を入れた状態で PropFolio を開きます。
+                  : `${area.monthlyRent.toLocaleString("ja-JP")}円/月`}
+                （{formatDataPeriod(dataset.sources.monthlyRent)}）を入れた状態で PropFolio
+                を開きます。
               </CardDescription>
-              <DataPeriodNote sources={["trade", "rent"]} />
             </CardHeader>
             <CardContent>
               <Button asChild className="w-full">
@@ -160,7 +175,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
                 {formatCount(area.population, "人")}（5 年で{" "}
                 {formatPercent(area.populationChangeRate, { signed: true })}）
               </CardDescription>
-              <DataPeriodNote sources={["population"]} />
+              <p className="text-xs text-muted-foreground">{metricPeriod("population")}</p>
             </CardHeader>
             <CardContent>
               <table className="w-full text-sm">
@@ -292,8 +307,8 @@ function YearTable({
                   row.change === null
                     ? "py-2 text-right text-muted-foreground"
                     : row.change >= 0
-                      ? "py-2 text-right text-emerald-700"
-                      : "py-2 text-right text-rose-700"
+                      ? "py-2 text-right text-good"
+                      : "py-2 text-right text-bad"
                 }
               >
                 {row.change === null ? "—" : formatPercent(row.change, { signed: true })}

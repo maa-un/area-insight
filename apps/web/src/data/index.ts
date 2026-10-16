@@ -1,13 +1,19 @@
 import {
   type AreaMetrics,
   AreaMetricsFile,
-  type DataPeriod,
-  type DataPeriodKey,
   LandPricePoints,
   type MunicipalityCode,
   RELIABLE_TRADE_COUNT,
   StationMetricsList,
 } from "@area-insight/shared";
+import {
+  formatDataPeriod,
+  formatLandPriceAsOf,
+  formatPopulationChange,
+  STALE_NOTE,
+  STALE_YEARS,
+  yearsApart,
+} from "@/lib/period";
 import { sampleLandPrices, sampleMetrics, sampleStations } from "./sample";
 
 // 画面が使うデータの入口。ビルド前に scripts/prepare-data.mjs が集計ジョブの書き出しを
@@ -41,12 +47,7 @@ type MetricDefinition = {
   better: "low" | "high";
   // basic: 公的データを集計した指標。distortion: 指標を組み合わせた市場の歪み（仕様書「市場の歪み指標」）
   group: "basic" | "distortion";
-  // 元データ（時点を数字の近くに出す）。複数あるものは組み合わせた指標
-  sources: readonly DataPeriodKey[];
 };
-
-// 地価は地価公示と地価調査（基準地価）を合わせて使う。時点は両方を示す。
-const LAND_PRICE_SOURCES = ["officialLandPrice", "prefectureLandPrice"] as const;
 
 // 並べ替え・比較・地図の塗り分けに使える指標。
 export const METRICS = {
@@ -55,70 +56,60 @@ export const METRICS = {
     unit: "万円",
     better: "low",
     group: "basic",
-    sources: ["trade"],
   },
   grossYield: {
     label: "想定表面利回り",
     unit: "%",
     better: "high",
     group: "basic",
-    sources: ["rent", "trade"],
   },
   vacancyRate: {
     label: "空き家率",
     unit: "%",
     better: "low",
     group: "basic",
-    sources: ["vacancy"],
   },
   populationChangeRate: {
     label: "人口増減率（5年）",
     unit: "%",
     better: "high",
     group: "basic",
-    sources: ["population"],
   },
   population: {
     label: "人口",
     unit: "人",
     better: "high",
     group: "basic",
-    sources: ["population"],
   },
   landUnitPrice: {
     label: "土地の坪単価（中央値）",
     unit: "万円/坪",
     better: "low",
     group: "basic",
-    sources: ["landTrade"],
   },
   landToOfficialRatio: {
     label: "取引 ÷ 公示地価",
     unit: "倍",
     better: "low",
     group: "distortion",
-    sources: ["landTrade", ...LAND_PRICE_SOURCES],
   },
   rentGap: {
     label: "人口の割に家賃が低い",
     unit: "pt",
     better: "high",
     group: "distortion",
-    sources: ["population", "rent"],
   },
   landGap: {
     label: "人口の割に土地が安い",
     unit: "pt",
     better: "high",
     group: "distortion",
-    sources: ["population", "landTrade"],
   },
   momentumGap: {
     label: "地価の上昇に取引が追いつかない",
     unit: "pt",
     better: "high",
     group: "distortion",
-    sources: [...LAND_PRICE_SOURCES, "landTrade"],
   },
 } as const satisfies Record<string, MetricDefinition>;
 export type MetricKey = keyof typeof METRICS;
@@ -134,12 +125,50 @@ export function isDistortionMetric(key: MetricKey): boolean {
   return METRICS[key].group === "distortion";
 }
 
-// 指標の元データの時点。データに無い元（取り込み前など）は除く。
-export function periodsOf(key: MetricKey): (DataPeriod & { key: DataPeriodKey })[] {
-  return METRICS[key].sources.flatMap((source) => {
-    const period = dataset.periods[source];
-    return period ? [{ ...period, key: source }] : [];
-  });
+// 指標の時点。すべての数字のそばに短く出す（仕様書「時点の表示ルール」）。
+// 利回りは家賃（調査年）と取引（期間）の組み合わせなので、根拠の両方を並べる。
+// 歪みは需要と価格の指標の組み合わせなので、根拠の時点をそれぞれ並べる。
+export function metricPeriod(key: MetricKey): string {
+  const { tradePrice, vacancyRate, monthlyRent, population, landTrade } = dataset.sources;
+  const landPrice = formatLandPriceAsOf(dataset.sources);
+  switch (key) {
+    case "tradePrice":
+      return formatDataPeriod(tradePrice);
+    case "grossYield":
+      return `家賃 ${formatDataPeriod(monthlyRent)}・取引 ${formatDataPeriod(tradePrice)}`;
+    case "vacancyRate":
+      return formatDataPeriod(vacancyRate);
+    case "populationChangeRate":
+      return formatPopulationChange(population);
+    case "population":
+      return formatDataPeriod(population);
+    case "landUnitPrice":
+      return formatDataPeriod(landTrade);
+    case "landToOfficialRatio":
+      return `${formatDataPeriod(landTrade)}・${landPrice}`;
+    case "rentGap":
+      return `人口 ${formatPopulationChange(population)}・家賃 ${formatDataPeriod(monthlyRent)}`;
+    case "landGap":
+      return `人口 ${formatPopulationChange(population)}・土地 ${formatDataPeriod(landTrade)}`;
+    case "momentumGap":
+      return `${landPrice}・土地 ${formatDataPeriod(landTrade)}`;
+  }
+}
+
+// 組み合わせた指標の根拠の時点が 2 年以上離れていれば注記する（利回り、家賃の歪み）。
+export function metricPeriodNote(key: MetricKey): string | null {
+  const { monthlyRent, population } = dataset.sources;
+  if (key === "grossYield") return yieldPeriodNote();
+  if (key === "rentGap" && yearsApart(population, monthlyRent) >= STALE_YEARS) {
+    return "人口と家賃は時点がずれています";
+  }
+  return null;
+}
+
+// 利回りの根拠（家賃と取引価格）の時点が 2 年以上離れていれば注記する。
+export function yieldPeriodNote(): string | null {
+  const { tradePrice, monthlyRent } = dataset.sources;
+  return yearsApart(monthlyRent, tradePrice) >= STALE_YEARS ? STALE_NOTE : null;
 }
 
 export function isMetricKey(value: string | null): value is MetricKey {

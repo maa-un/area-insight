@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  formatDataPeriod,
   formatDistance,
   formatGap,
   formatManYenPerTsubo,
@@ -47,17 +46,5 @@ describe("distortion gaps", () => {
     expect(formatGap(-12)).toBe("-12pt");
     expect(formatGap(0)).toBe("0pt");
     expect(formatGap(null)).toBe(NO_DATA);
-  });
-});
-
-describe("data periods", () => {
-  it("shows a quarter range by month, a date as of that day and a year", () => {
-    expect(formatDataPeriod({ from: "2025-07-01", to: "2026-06-30", precision: "quarter" })).toBe(
-      "2025年7月〜2026年6月",
-    );
-    expect(formatDataPeriod({ from: null, to: "2026-01-01", precision: "day" })).toBe(
-      "2026年1月1日時点",
-    );
-    expect(formatDataPeriod({ from: null, to: "2023-01-01", precision: "year" })).toBe("2023年");
   });
 });

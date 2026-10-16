@@ -545,48 +545,64 @@ export function metricsSql(dataset: string): MetricsSql {
       AND official_bands.station_name = nearest.station.station_name
     CROSS JOIN target`;
 
-  // 指標ごとの元データの時点（仕様書「指標と基準時点」）。画面は数字の近くにこの時点を出す。
-  // 取引は四半期の範囲（初日〜最後の四半期の末日）、地価は価格の時点、統計は年。
-  const quarterRange = (key: string, source: string, months: number, latest: string) => `
-      SELECT '${key}' AS key, '${source}' AS source,
-        DATE_ADD(DATE_SUB(${latest}, INTERVAL ${months} MONTH), INTERVAL 3 MONTH) AS from_date,
-        LAST_DAY(DATE_ADD(${latest}, INTERVAL 2 MONTH)) AS to_date, 'quarter' AS precision`;
-  const statisticYear = (key: string, source: string, table: string) => `
-      SELECT '${key}', '${source}', CAST(NULL AS DATE),
-        SAFE.DATE(SAFE_CAST(SUBSTR(MAX(time_code), 1, 4) AS INT64), 1, 1), 'year'
-      FROM ${t("raw_statistics")} WHERE table_name = '${table}'`;
-  const dataPeriods = `
-    CREATE OR REPLACE TABLE ${t("data_periods")} AS
+  // 指標ごとの出典と時点（packages/shared の DataSources）。画面はすべての数字のそばに時点を出す。
+  //   取引: 期間の最初の四半期の初日〜最新の四半期の末日（指標は直近 4 四半期、土地は 8 四半期）
+  //   住宅・土地統計調査: time_code の年の 10 月 1 日時点  住民基本台帳人口: 最新年の 1 月 1 日時点
+  //   地価公示・地価調査: land_price_points の価格の時点（取り込む前は NULL）
+  //   駅ごとの取引: 取引時期を読んだ範囲（取引相場は直近 4 四半期、土地の坪単価は 8 四半期）
+  // 元データが無くても行は出す（時点は NULL）。画面の検証（DataSources）がすべてのキーを求めるため。
+  const dataSources = `
+    CREATE OR REPLACE TABLE ${t("data_sources")} AS
     WITH latest AS (SELECT MAX(period_start) AS quarter FROM ${t("raw_transactions")}),
     ${stationTrades},
-    station_land AS (
-      SELECT MIN(period_start) AS from_date, MAX(period_start) AS to_date FROM station_trades, station_latest
-      WHERE land_type = '${LAND_TYPE}' AND period_start > DATE_SUB(station_latest.quarter, INTERVAL ${LAND_MONTHS} MONTH)
+    survey AS (
+      SELECT table_name, DATE(CAST(SUBSTR(MAX(time_code), 1, 4) AS INT64), 10, 1) AS as_of
+      FROM ${t("raw_statistics")} WHERE table_name IN ('housing_vacancy', 'private_rent_per_sqm')
+      GROUP BY table_name
+    ),
+    population AS (
+      SELECT DATE(MAX(CAST(SUBSTR(time_code, 1, 4) AS INT64)), 1, 1) AS as_of
+      FROM ${t("raw_statistics")}
+      WHERE table_name = 'resident_population' AND SAFE_CAST(value AS FLOAT64) IS NOT NULL
+    ),
+    stations AS (
+      SELECT
+        MIN(IF(land_type = '${HOUSE_TYPE}' AND period_start > DATE_SUB(quarter, INTERVAL ${RECENT_MONTHS} MONTH),
+          period_start, NULL)) AS house_from,
+        MIN(IF(land_type = '${LAND_TYPE}' AND period_start > DATE_SUB(quarter, INTERVAL ${LAND_MONTHS} MONTH),
+          period_start, NULL)) AS land_from,
+        LAST_DAY(DATE_ADD(MAX(quarter), INTERVAL 2 MONTH)) AS period_to
+      FROM station_trades, station_latest
+    ),
+    land_prices AS (
+      SELECT
+        MAX(IF(classification = '${OFFICIAL}', as_of, NULL)) AS official,
+        MAX(IF(classification = '${PREFECTURE_SURVEY}', as_of, NULL)) AS prefecture
+      FROM ${t("land_price_points")}
     )
-    SELECT * FROM (
-      ${quarterRange("trade", "不動産情報ライブラリ（取引価格）", RECENT_MONTHS, "(SELECT quarter FROM latest)")}
-      UNION ALL
-      ${quarterRange("landTrade", "不動産情報ライブラリ（取引価格）", LAND_MONTHS, "(SELECT quarter FROM latest)")}
-      UNION ALL
-      ${quarterRange("stationTrade", "不動産情報ライブラリ（取引価格）", RECENT_MONTHS, "(SELECT quarter FROM station_latest)")}
-      UNION ALL
-      SELECT 'stationLandTrade', '不動産情報ライブラリ（取引価格）', from_date,
-        LAST_DAY(DATE_ADD(to_date, INTERVAL 2 MONTH)), 'quarter'
-      FROM station_land
-      UNION ALL
-      SELECT 'officialLandPrice', '地価公示', CAST(NULL AS DATE), MAX(as_of), 'day'
-      FROM ${t("land_price_points")} WHERE classification = '${OFFICIAL}'
-      UNION ALL
-      SELECT 'prefectureLandPrice', '都道府県地価調査', CAST(NULL AS DATE), MAX(as_of), 'day'
-      FROM ${t("land_price_points")} WHERE classification = '${PREFECTURE_SURVEY}'
-      UNION ALL
-      ${statisticYear("vacancy", "住宅・土地統計調査", "housing_vacancy")}
-      UNION ALL
-      ${statisticYear("rent", "住宅・土地統計調査", "private_rent_per_sqm")}
-      UNION ALL
-      ${statisticYear("population", "住民基本台帳人口", "resident_population")}
-    )
-    WHERE to_date IS NOT NULL`;
+    SELECT 'tradePrice' AS metric, 'XIT001' AS source,
+      DATE_SUB(quarter, INTERVAL ${RECENT_MONTHS - 3} MONTH) AS period_from,
+      LAST_DAY(DATE_ADD(quarter, INTERVAL 2 MONTH)) AS period_to,
+      CAST(NULL AS DATE) AS as_of
+    FROM latest
+    UNION ALL
+    SELECT 'landTrade', 'XIT001', DATE_SUB(quarter, INTERVAL ${LAND_MONTHS - 3} MONTH),
+      LAST_DAY(DATE_ADD(quarter, INTERVAL 2 MONTH)), NULL
+    FROM latest
+    UNION ALL
+    SELECT 'vacancyRate', 'housing_survey', NULL, NULL, as_of FROM survey WHERE table_name = 'housing_vacancy'
+    UNION ALL
+    SELECT 'monthlyRent', 'housing_survey', NULL, NULL, as_of FROM survey WHERE table_name = 'private_rent_per_sqm'
+    UNION ALL
+    SELECT 'population', 'resident_register', NULL, NULL, as_of FROM population
+    UNION ALL
+    SELECT 'stations', 'XPT001', house_from, IF(house_from IS NULL, NULL, period_to), NULL FROM stations
+    UNION ALL
+    SELECT 'stationLandTrade', 'XPT001', land_from, IF(land_from IS NULL, NULL, period_to), NULL FROM stations
+    UNION ALL
+    SELECT 'officialLandPrice', 'official_land_price', NULL, NULL, official FROM land_prices
+    UNION ALL
+    SELECT 'prefectureLandPrice', 'prefecture_land_price', NULL, NULL, prefecture FROM land_prices`;
 
   // 土地の取引単価の分布。地区ごとと市区町村全体（district が NULL）。
   // 分位は 0〜100% を 5% 刻みの 21 値で持ち、画面で「この単価は地区の下位何%か」を出す。
@@ -636,17 +652,17 @@ export function metricsSql(dataset: string): MetricsSql {
       districtLandPrices,
       stationMetrics,
       stationLandPrices,
-      dataPeriods,
+      dataSources,
     ],
     exports: (bucket, exportId) =>
       [
+        "data_sources",
         "area_metrics",
         "area_details",
         "district_land_prices",
         "land_price_points",
         "station_metrics",
         "station_land_prices",
-        "data_periods",
       ].map(
         (name) => `
           EXPORT DATA OPTIONS (

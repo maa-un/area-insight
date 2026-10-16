@@ -10,6 +10,80 @@ import { centersOf, convert, fullNames, latestRows } from "../../scripts/prepare
 
 // BigQuery の JSON 書き出しの形（INT64 は文字列）を模した行。
 const exportRows = {
+  data_sources: [
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "tradePrice",
+      source: "XIT001",
+      period_from: "2025-04-01",
+      period_to: "2026-03-31",
+      as_of: null,
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "vacancyRate",
+      source: "housing_survey",
+      period_from: null,
+      period_to: null,
+      as_of: "2023-10-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "monthlyRent",
+      source: "housing_survey",
+      period_from: null,
+      period_to: null,
+      as_of: "2023-10-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "population",
+      source: "resident_register",
+      period_from: null,
+      period_to: null,
+      as_of: "2024-01-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "stations",
+      source: "XPT001",
+      period_from: "2025-04-01",
+      period_to: "2026-03-31",
+      as_of: null,
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "landTrade",
+      source: "XIT001",
+      period_from: "2024-04-01",
+      period_to: "2026-03-31",
+      as_of: null,
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "officialLandPrice",
+      source: "official_land_price",
+      period_from: null,
+      period_to: null,
+      as_of: "2026-01-01",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "prefectureLandPrice",
+      source: "prefecture_land_price",
+      period_from: null,
+      period_to: null,
+      as_of: null,
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      metric: "stationLandTrade",
+      source: "XPT001",
+      period_from: null,
+      period_to: null,
+      as_of: null,
+    },
+  ],
   area_metrics: [
     {
       export_id: "2026-10-01T00:00:00.000Z",
@@ -170,24 +244,6 @@ const exportRows = {
       official_by_station_distance: [],
     },
   ],
-  data_periods: [
-    {
-      export_id: "2026-10-16T00:00:00.000Z",
-      key: "trade",
-      source: "不動産情報ライブラリ（取引価格）",
-      from_date: "2025-07-01",
-      to_date: "2026-06-30",
-      precision: "quarter",
-    },
-    {
-      export_id: "2026-10-16T00:00:00.000Z",
-      key: "vacancy",
-      source: "住宅・土地統計調査",
-      from_date: null,
-      to_date: "2023-01-01",
-      precision: "year",
-    },
-  ],
   station_metrics: [
     {
       export_id: "2026-10-16T00:00:00.000Z",
@@ -234,13 +290,19 @@ describe("prepare-data", () => {
     const metrics = AreaMetricsFile.parse(data.metrics);
     expect(metrics.sample).toBe(false);
     expect(metrics.updatedAt).toBe("2026-10-16");
-    expect(metrics.periods.trade).toEqual({
-      source: "不動産情報ライブラリ（取引価格）",
-      from: "2025-07-01",
-      to: "2026-06-30",
-      precision: "quarter",
+    expect(metrics.sources.tradePrice).toEqual({
+      source: "XIT001",
+      period: { from: "2025-04-01", to: "2026-03-31" },
+      asOf: null,
     });
-    expect(metrics.periods.vacancy?.precision).toBe("year");
+    // 取り込む前の地価・駅の土地は時点が null のまま通る
+    expect(metrics.sources.prefectureLandPrice.asOf).toBeNull();
+    expect(metrics.sources.stationLandTrade.period).toBeNull();
+    expect(metrics.sources.vacancyRate).toEqual({
+      source: "housing_survey",
+      period: null,
+      asOf: "2023-10-01",
+    });
     expect(metrics.areas[0]).toMatchObject({
       population: 234111,
       tradeCount: 35,

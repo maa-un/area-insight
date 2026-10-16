@@ -5,11 +5,12 @@ import {
 } from "@area-insight/shared";
 import { TrainFront } from "lucide-react";
 import { useState } from "react";
-import { DataPeriodNote } from "@/components/data-period";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { dataset } from "@/data";
 import { formatDate, formatManYenPerTsubo, formatTsuboRange, NO_DATA } from "@/lib/format";
+import { formatDataPeriod, formatLandPriceAsOf } from "@/lib/period";
 
 // 駅ごとの土地の坪単価の目安（仕様書「駅ごとの妥当な土地の坪単価」）。
 // その駅が最寄りの土地の取引を最新の公示地価の時点に補正し、25%〜75% を「妥当な範囲」として示す。
@@ -48,9 +49,10 @@ export function StationLandPriceSection({
             : ""}
           形・接道・面積の違いは補正していません。個別の土地の査定ではありません。
         </CardDescription>
-        <DataPeriodNote
-          sources={["stationLandTrade", "officialLandPrice", "prefectureLandPrice"]}
-        />
+        <p className="text-xs text-muted-foreground">
+          {formatDataPeriod(dataset.sources.stationLandTrade)}・
+          {formatLandPriceAsOf(dataset.sources)}
+        </p>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         {stations.length === 0 ? (

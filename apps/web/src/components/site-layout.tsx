@@ -46,7 +46,7 @@ function SiteHeader({ page }: { page: PageName }) {
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-2 px-4 sm:gap-4">
         <a
           href="/"
-          className="flex shrink-0 items-center gap-2 font-extrabold tracking-tight whitespace-nowrap"
+          className="flex shrink-0 items-center gap-2 font-heading font-semibold tracking-wide whitespace-nowrap"
         >
           <MapPin className="size-5 text-primary" aria-hidden />
           area-insight
@@ -98,9 +98,9 @@ function SiteFooter() {
     <footer className="mt-10 bg-ink-deep text-cream-text/75">
       <div className="mx-auto w-full max-w-5xl px-4 py-10 text-xs">
         <div className="flex flex-col gap-1">
-          <p>データの更新日: {formatDate(dataset.updatedAt)}</p>
           <p>
-            各指標の元データの時点（取引の期間、地価の時点、統計の年）は、数字の近くに示しています。
+            データの更新日: {formatDate(dataset.updatedAt)}
+            （指標ごとの時点は各数字のそばに示します）
           </p>
           <p>掲載する指標は目安であり、投資判断を保証するものではありません。</p>
         </div>

@@ -76,27 +76,6 @@ export function formatDate(iso: string): string {
   return `${y}年${m}月${d}日`;
 }
 
-// 元データの時点。期間は「2025年7月〜2026年6月」、時点は「2026年1月1日時点」、年は「2023年」。
-export function formatDataPeriod(period: {
-  from: string | null;
-  to: string;
-  precision: "quarter" | "day" | "year";
-}): string {
-  const [ty, tm] = period.to.split("-").map(Number);
-  switch (period.precision) {
-    case "quarter": {
-      const to = `${ty}年${tm}月`;
-      if (!period.from) return `${to}まで`;
-      const [fy, fm] = period.from.split("-").map(Number);
-      return `${fy}年${fm}月〜${to}`;
-    }
-    case "day":
-      return `${formatDate(period.to)}時点`;
-    case "year":
-      return `${ty}年`;
-  }
-}
-
 // 「2025Q2」→「2025年4〜6月」
 export function formatQuarter(label: string): string {
   const [year, q] = label.split("Q").map(Number);

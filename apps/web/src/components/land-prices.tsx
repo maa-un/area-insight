@@ -8,11 +8,11 @@ import {
 } from "@area-insight/shared";
 import { Landmark, Scale, TrainFront } from "lucide-react";
 import { useId, useState } from "react";
-import { DataPeriodNote } from "@/components/data-period";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { dataset } from "@/data";
 import {
   formatPercent,
   formatQuarter,
@@ -29,6 +29,7 @@ import {
   unitPriceOf,
   verdictOf,
 } from "@/lib/land-price";
+import { formatDataPeriod, formatLandPriceAsOf } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
 // 土地（宅地(土地)）の取引単価。地区ごとの相場と、価格チェッカー。
@@ -41,9 +42,9 @@ const DEFAULT_ROWS = 15;
 
 // 判定の色。土地の価格チェッカーと公示地価との比較で同じ色を使う。
 const TONE = {
-  low: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  mid: "border-border bg-muted/40 text-foreground",
-  high: "border-rose-200 bg-rose-50 text-rose-900",
+  low: "border-good/50 text-good",
+  mid: "border-border text-muted-foreground",
+  high: "border-bad/50 text-bad",
 } as const;
 
 const BAND_LABELS: Record<StationDistanceBand, string> = {
@@ -168,7 +169,9 @@ function OfficialComparisonCard({
           の土地の取引単価（中央値）を、同じ市区町村の住宅地の公示地価・基準地価（地点の中央値）と比べます。
           1 倍未満なら、公示地価より安く取引されています。
         </CardDescription>
-        <DataPeriodNote sources={["landTrade", "officialLandPrice", "prefectureLandPrice"]} />
+        <p className="text-xs text-muted-foreground">
+          {formatDataPeriod(dataset.sources.landTrade)}・{formatLandPriceAsOf(dataset.sources)}
+        </p>
       </CardHeader>
       <CardContent>
         {official.residential === null || ratio === null || verdict === null ? (
@@ -226,7 +229,7 @@ function StationDistanceCard({
           {areaName}の住宅地の公示地価・基準地価の地点を、最寄り駅までの道路距離で分けた中央値。徒歩
           1 分 = {METERS_PER_WALK_MINUTE}m。
         </CardDescription>
-        <DataPeriodNote sources={["officialLandPrice", "prefectureLandPrice"]} />
+        <p className="text-xs text-muted-foreground">{formatLandPriceAsOf(dataset.sources)}</p>
       </CardHeader>
       <CardContent>
         {bands.length === 0 ? (
@@ -384,8 +387,8 @@ function Row({
         <td
           className={cn(
             "py-2 text-right",
-            ratio !== null && ratio < 0.95 && "text-emerald-700",
-            ratio !== null && ratio > 1.05 && "text-rose-700",
+            ratio !== null && ratio < 0.95 && "text-good",
+            ratio !== null && ratio > 1.05 && "text-bad",
           )}
         >
           {formatRatio(ratio)}

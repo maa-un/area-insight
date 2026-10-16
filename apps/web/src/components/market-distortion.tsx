@@ -1,9 +1,8 @@
 import { type AreaMetrics, DISTORTION_THRESHOLD } from "@area-insight/shared";
 import { TriangleAlert } from "lucide-react";
 import { Chip } from "@/components/brand";
-import { DataPeriodNote } from "@/components/data-period";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { METRICS, type MetricKey } from "@/data";
+import { METRICS, type MetricKey, metricPeriod, metricPeriodNote } from "@/data";
 import { formatMetric } from "@/lib/format";
 
 // 市場の歪み（仕様書「市場の歪み指標」）。需要の指標は高いのに価格の指標は低い、を都道府県内の順位の差で示す。
@@ -64,7 +63,7 @@ export function MarketDistortionSection({
               土地の取引単価の中央値 ÷
               住宅地の地価の中央値。公示地価は標準的な更地の価格のため、古家付き・不整形地の多い市区町村では低めに出ます。
             </p>
-            <DataPeriodNote sources={METRICS.landToOfficialRatio.sources} />
+            <p className="text-xs text-muted-foreground">{metricPeriod("landToOfficialRatio")}</p>
           </li>
         </ul>
       </CardContent>
@@ -92,7 +91,8 @@ function GapItem({
         {description}
         {value === null && "。元データが無いか、取引が少ないため出していません"}
       </p>
-      <DataPeriodNote sources={METRICS[metric].sources} />
+      <p className="text-xs text-muted-foreground">{metricPeriod(metric)}</p>
+      {metricPeriodNote(metric) && <p className="text-xs text-bad">{metricPeriodNote(metric)}</p>}
     </li>
   );
 }

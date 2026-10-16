@@ -5,7 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-sans);
+  --font-heading:
+    "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", "Noto Serif JP", Georgia, serif;
   --font-sans:
     system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
     "Yu Gothic UI", sans-serif;
@@ -59,51 +60,52 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* maa'un のブランド配色（note・Shorts と同じ）。クリーム地・濃インク・テラコッタ。 */
+/* maa'un のブランド配色を、ホテルのような落ち着いた色味に寄せたもの。
+   アイボリーの地・チャコールの文字・くすんだ赤銅（テラコッタを深く沈めた色）。彩度を抑え、罫線は細く薄く。 */
 :root {
-  --background: #f7f0de;
-  --foreground: #26201a;
-  --card: #fffbf3;
-  --card-foreground: #26201a;
-  --popover: #fffbf3;
-  --popover-foreground: #26201a;
-  --primary: #c4582c;
-  --primary-foreground: #f3e9d2;
-  --secondary: #e2d6bc;
-  --secondary-foreground: #26201a;
-  --muted: #eee4cd;
-  --muted-foreground: #8c7e68;
-  --accent: #f1e6d0;
-  --accent-foreground: #26201a;
-  --destructive: #b0563e;
-  --border: #e2d6bc;
-  --input: #d8cbb0;
-  --ring: #c4582c;
-  --chart-1: #c4582c;
-  --chart-2: #26201a;
-  --chart-3: #cbbea0;
-  --chart-4: #5e8a5e;
-  --chart-5: #e2966e;
-  --radius: 0.75rem;
-  --sidebar: #fffbf3;
-  --sidebar-foreground: #26201a;
-  --sidebar-primary: #c4582c;
-  --sidebar-primary-foreground: #f3e9d2;
-  --sidebar-accent: #eee4cd;
-  --sidebar-accent-foreground: #26201a;
-  --sidebar-border: #e2d6bc;
-  --sidebar-ring: #c4582c;
-  /* ブランド固有の色。濃色面（フッターなど）とバーに使う */
-  --ink: #26201a;
-  --ink-deep: #211c16;
-  --cream: #f7f0de;
-  --cream-text: #f3e9d2;
-  --terracotta: #c4582c;
-  --terracotta-soft: #e2966e;
-  --bar-bg: #e2d6bc;
-  --bar-muted: #cbbea0;
-  --good: #5e8a5e;
-  --bad: #b0563e;
+  --background: #f5f2eb;
+  --foreground: #2a2622;
+  --card: #fcfbf7;
+  --card-foreground: #2a2622;
+  --popover: #fcfbf7;
+  --popover-foreground: #2a2622;
+  --primary: #9a5a3e;
+  --primary-foreground: #f6f1e7;
+  --secondary: #e9e3d7;
+  --secondary-foreground: #2a2622;
+  --muted: #ede8de;
+  --muted-foreground: #7c7467;
+  --accent: #efeae0;
+  --accent-foreground: #2a2622;
+  --destructive: #9c574a;
+  --border: #e2dccf;
+  --input: #d6cfc0;
+  --ring: #9a5a3e;
+  --chart-1: #9a5a3e;
+  --chart-2: #2a2622;
+  --chart-3: #cfc6b5;
+  --chart-4: #6b8068;
+  --chart-5: #c9a28a;
+  --radius: 0.5rem;
+  --sidebar: #fcfbf7;
+  --sidebar-foreground: #2a2622;
+  --sidebar-primary: #9a5a3e;
+  --sidebar-primary-foreground: #f6f1e7;
+  --sidebar-accent: #ede8de;
+  --sidebar-accent-foreground: #2a2622;
+  --sidebar-border: #e2dccf;
+  --sidebar-ring: #9a5a3e;
+  /* ブランド固有の色。濃色面（フッターなど）とバーに使う。terracotta は差し色（赤銅）の名前として残す */
+  --ink: #2a2622;
+  --ink-deep: #1f1b18;
+  --cream: #f5f2eb;
+  --cream-text: #ece6da;
+  --terracotta: #9a5a3e;
+  --terracotta-soft: #c9a28a;
+  --bar-bg: #e7e1d5;
+  --bar-muted: #c9c0ae;
+  --good: #6b8068;
+  --bad: #9c574a;
 }
 
 .dark {
@@ -150,6 +152,13 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+  /* 見出しは明朝・中太で落ち着かせる。数字は本文のゴシックのまま */
+  h1,
+  h2,
+  h3 {
+    @apply font-heading font-semibold;
+    letter-spacing: 0.01em;
   }
   html {
     @apply font-sans;

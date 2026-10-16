@@ -10,13 +10,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TABLES = [
+  "data_sources",
   "area_metrics",
   "area_details",
   "district_land_prices",
   "land_price_points",
   "station_metrics",
   "station_land_prices",
-  "data_periods",
 ];
 
 // BigQuery の JSON 書き出しは INT64 を文字列にするため、数値に戻す。
@@ -50,6 +50,21 @@ export function fullNames(rows) {
   );
 }
 
+// 指標ごとの出典と時点（data_sources の行）を、packages/shared の DataSources の形にする。
+export function sourcesOf(rows) {
+  return Object.fromEntries(
+    latestRows(rows).map((row) => [
+      row.metric,
+      {
+        source: row.source,
+        period:
+          row.period_from && row.period_to ? { from: row.period_from, to: row.period_to } : null,
+        asOf: row.as_of ?? null,
+      },
+    ]),
+  );
+}
+
 // 土地の取引単価の分布を、市区町村コード → { periodFrom, periodTo, total, districts } にまとめる。
 // district が null の行は市区町村全体。
 export function landPricesByCode(rows) {
@@ -72,21 +87,6 @@ export function landPricesByCode(rows) {
   }
   for (const entry of byCode.values()) entry.districts.sort((a, b) => b.count - a.count);
   return byCode;
-}
-
-// 指標ごとの元データの時点（data_periods の行）を、キー → { source, from, to, precision } にまとめる。
-export function periodsOf(rows) {
-  return Object.fromEntries(
-    latestRows(rows).map((row) => [
-      row.key,
-      {
-        source: row.source,
-        from: row.from_date ?? null,
-        to: row.to_date,
-        precision: row.precision,
-      },
-    ]),
-  );
 }
 
 // 駅ごとの土地の坪単価の目安。市区町村ページでは、その市区町村の土地が取引された駅だけを出す。
@@ -137,13 +137,13 @@ export function officialLandPricesOf(row) {
 
 export function convert(
   {
+    data_sources,
     area_metrics,
     area_details,
     district_land_prices = [],
     land_price_points,
     station_metrics,
     station_land_prices = [],
-    data_periods = [],
   },
   centers = new Map(),
 ) {
@@ -151,12 +151,12 @@ export function convert(
   const names = fullNames(metrics);
   const landPrices = landPricesByCode(district_land_prices);
   const stationLandPrices = stationLandPricesOf(station_land_prices);
-  // 書き出しの印は集計ジョブの実行時刻（ISO 8601）。その日付を更新日にする
-  const updatedAt = String(metrics[0]?.export_id ?? "").slice(0, 10);
+  // 集計を動かした日 = 書き出しの印（実行時刻）の日付
+  const updatedAt = (metrics[0]?.export_id ?? "").slice(0, 10);
   return {
     metrics: {
       updatedAt,
-      periods: periodsOf(data_periods),
+      sources: sourcesOf(data_sources),
       sample: false,
       areas: metrics.map((row) => ({
         code: row.code,

@@ -2,10 +2,9 @@ import { type AreaMetrics, prefectureName } from "@area-insight/shared";
 import { ChevronRight, Columns3, ListOrdered, Map as MapIcon, Search } from "lucide-react";
 import { type ComponentType, useId, useState } from "react";
 import { Bar, Eyebrow } from "@/components/brand";
-import { DataPeriodNote } from "@/components/data-period";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { dataset, METRICS, type MetricKey, rankableAreas, sortAreas } from "@/data";
+import { dataset, METRICS, type MetricKey, metricPeriod, rankableAreas, sortAreas } from "@/data";
 import { formatMetric } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { areaPath } from "@/routes";
@@ -50,7 +49,7 @@ export function HomePage() {
         <Eyebrow>
           全国 {dataset.areas.length.toLocaleString("ja-JP")} 市区町村を公的データで
         </Eyebrow>
-        <h1 className="max-w-3xl text-4xl font-extrabold tracking-tight text-balance sm:text-5xl">
+        <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
           その土地、<span className="text-terracotta">高い</span>のか
           <span className="text-terracotta">安い</span>のか。
         </h1>
@@ -93,8 +92,9 @@ export function HomePage() {
             <Card key={key}>
               <CardHeader>
                 <CardTitle className="text-base">{title}</CardTitle>
-                <CardDescription>{METRICS[key].label}</CardDescription>
-                <DataPeriodNote sources={METRICS[key].sources} />
+                <CardDescription>
+                  {METRICS[key].label}・{metricPeriod(key)}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <TopList

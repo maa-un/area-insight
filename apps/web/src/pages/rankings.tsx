@@ -8,7 +8,6 @@ import {
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Bookmark, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { Bar } from "@/components/brand";
-import { DataPeriodNote } from "@/components/data-period";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +20,7 @@ import {
   isTradeMetric,
   METRICS,
   type MetricKey,
+  metricPeriod,
   rankableAreas,
   sortAreas,
 } from "@/data";
@@ -131,8 +131,6 @@ export function RankingsPage() {
         <SavedFilters current={conditions} />
       </div>
 
-      <DataPeriodNote sources={METRICS[metric].sources} />
-
       {isDistortionMetric(metric) && (
         <p className="text-sm text-muted-foreground">
           {metric === "landToOfficialRatio"
@@ -175,6 +173,9 @@ export function RankingsPage() {
                     onClick={() => replaceSearchParams({ metric: key, order: undefined })}
                   >
                     {METRICS[key].label}
+                    <span className="block text-[11px] font-normal text-muted-foreground">
+                      {metricPeriod(key)}
+                    </span>
                   </button>
                 </th>
               ))}

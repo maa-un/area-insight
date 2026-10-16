@@ -2,8 +2,6 @@ import type {
   AreaDetail,
   AreaMetrics,
   AreaMetricsFile,
-  DataPeriod,
-  DataPeriodKey,
   LandPricePoint,
   LngLat,
   StationLandPrice,
@@ -442,52 +440,13 @@ const SEEDS: Seed[] = [
   },
 ];
 
-export const SAMPLE_UPDATED_AT = "2026-10-01";
+// 最新の四半期が 2026Q3（QUARTERS の末尾）。取引の期間はその直近 4 四半期
+export const SAMPLE_UPDATED_AT = "2026-10-16";
+const SAMPLE_TRADE_PERIOD = { from: "2025-10-01", to: "2026-09-30" };
+const SAMPLE_SURVEY = { source: "housing_survey", period: null, asOf: "2023-10-01" } as const;
+const SAMPLE_LAND_PERIOD = { from: "2024-10-01", to: "2026-09-30" };
 // 公示地価の時点。駅の土地の坪単価はこの時点に補正した値として置く
 const SAMPLE_OFFICIAL_AS_OF = "2026-01-01";
-
-// 指標ごとの元データの時点（実データでは集計ジョブの data_periods）。
-const SAMPLE_PERIODS: Partial<Record<DataPeriodKey, DataPeriod>> = {
-  trade: {
-    source: "不動産情報ライブラリ（取引価格）",
-    from: "2025-10-01",
-    to: "2026-09-30",
-    precision: "quarter",
-  },
-  landTrade: {
-    source: "不動産情報ライブラリ（取引価格）",
-    from: "2024-10-01",
-    to: "2026-09-30",
-    precision: "quarter",
-  },
-  stationTrade: {
-    source: "不動産情報ライブラリ（取引価格）",
-    from: "2025-10-01",
-    to: "2026-09-30",
-    precision: "quarter",
-  },
-  stationLandTrade: {
-    source: "不動産情報ライブラリ（取引価格）",
-    from: "2024-10-01",
-    to: "2026-09-30",
-    precision: "quarter",
-  },
-  officialLandPrice: {
-    source: "地価公示",
-    from: null,
-    to: SAMPLE_OFFICIAL_AS_OF,
-    precision: "day",
-  },
-  prefectureLandPrice: {
-    source: "都道府県地価調査",
-    from: null,
-    to: "2025-07-01",
-    precision: "day",
-  },
-  vacancy: { source: "住宅・土地統計調査", from: null, to: "2023-01-01", precision: "year" },
-  rent: { source: "住宅・土地統計調査", from: null, to: "2023-01-01", precision: "year" },
-  population: { source: "住民基本台帳人口", from: null, to: "2025-01-01", precision: "year" },
-};
 
 // level を中心に ±spread の幅で広がる 21 個の分位（0%〜100%、5% 刻み）。100 円単位に丸める。
 function quantilesAround(level: number, spread: number): number[] {
@@ -601,7 +560,17 @@ const SAMPLE_AREAS = ranked(SEEDS.map(metricsFor));
 
 export const sampleMetrics: AreaMetricsFile = {
   updatedAt: SAMPLE_UPDATED_AT,
-  periods: SAMPLE_PERIODS,
+  sources: {
+    tradePrice: { source: "XIT001", period: SAMPLE_TRADE_PERIOD, asOf: null },
+    vacancyRate: SAMPLE_SURVEY,
+    monthlyRent: SAMPLE_SURVEY,
+    population: { source: "resident_register", period: null, asOf: "2026-01-01" },
+    stations: { source: "XPT001", period: SAMPLE_TRADE_PERIOD, asOf: null },
+    landTrade: { source: "XIT001", period: SAMPLE_LAND_PERIOD, asOf: null },
+    officialLandPrice: { source: "official_land_price", period: null, asOf: SAMPLE_OFFICIAL_AS_OF },
+    prefectureLandPrice: { source: "prefecture_land_price", period: null, asOf: "2025-07-01" },
+    stationLandTrade: { source: "XPT001", period: SAMPLE_LAND_PERIOD, asOf: null },
+  },
   sample: true,
   areas: SAMPLE_AREAS,
 };

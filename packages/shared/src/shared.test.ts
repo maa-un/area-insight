@@ -62,16 +62,24 @@ describe("prefectureName", () => {
 
 describe("AreaMetricsFile", () => {
   it("accepts a file with nullable metrics", () => {
+    const period = {
+      source: "XIT001",
+      period: { from: "2025-10-01", to: "2026-09-30" },
+      asOf: null,
+    };
+    const survey = { source: "housing_survey", period: null, asOf: "2023-10-01" };
     const file = {
-      updatedAt: "2026-10-01",
-      periods: {
-        trade: {
-          source: "不動産情報ライブラリ",
-          from: "2025-07-01",
-          to: "2026-06-30",
-          precision: "quarter",
-        },
-        officialLandPrice: { source: "地価公示", from: null, to: "2026-01-01", precision: "day" },
+      updatedAt: "2026-10-16",
+      sources: {
+        tradePrice: period,
+        vacancyRate: survey,
+        monthlyRent: survey,
+        population: { source: "resident_register", period: null, asOf: "2026-01-01" },
+        stations: { ...period, source: "XPT001" },
+        landTrade: period,
+        officialLandPrice: { source: "official_land_price", period: null, asOf: "2026-01-01" },
+        prefectureLandPrice: { source: "prefecture_land_price", period: null, asOf: null },
+        stationLandTrade: { ...period, source: "XPT001" },
       },
       sample: true,
       areas: [
@@ -104,14 +112,7 @@ describe("AreaMetricsFile", () => {
     expect(AreaMetricsFile.parse(file)).toEqual(file);
   });
 
-  it("rejects a distortion gap outside -100 to 100 and an unknown period key", () => {
-    const file = AreaMetricsFile.parse({
-      updatedAt: "2026-10-01",
-      periods: {},
-      sample: true,
-      areas: [],
-    });
-    expect(AreaMetricsFile.safeParse({ ...file, periods: { unknown: file } }).success).toBe(false);
+  it("rejects a distortion gap outside -100 to 100", () => {
     expect(DistortionGap.safeParse(120).success).toBe(false);
     expect(DistortionGap.safeParse(-100).success).toBe(true);
   });

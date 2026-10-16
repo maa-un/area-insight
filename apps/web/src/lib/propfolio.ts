@@ -18,9 +18,10 @@ export function propfolioUrl(area: AreaMetrics): string {
   if (area.vacancyRate !== null) url.searchParams.set("vacancy_rate", String(area.vacancyRate));
   if (area.populationChangeRate !== null)
     url.searchParams.set("population_change_rate", String(area.populationChangeRate));
-  // 元データの時点（YYYY-MM-DD）。取引は期間の終わり、統計は年の初日
-  const { trade, rent } = dataset.periods;
-  if (trade) url.searchParams.set("price_as_of", trade.to);
-  if (rent) url.searchParams.set("rent_as_of", rent.to);
+  // 元データの時点（YYYY-MM-DD）。取引は期間の終わり、家賃は調査の時点
+  const { tradePrice, monthlyRent } = dataset.sources;
+  const tradeAsOf = tradePrice.period?.to ?? tradePrice.asOf;
+  if (tradeAsOf) url.searchParams.set("price_as_of", tradeAsOf);
+  if (monthlyRent.asOf) url.searchParams.set("rent_as_of", monthlyRent.asOf);
   return url.toString();
 }
