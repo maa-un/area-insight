@@ -440,6 +440,13 @@ const SEEDS: Seed[] = [
 
 export const SAMPLE_AS_OF = "2026-09-30";
 
+// level を中心に ±spread の幅で広がる 21 個の分位（0%〜100%、5% 刻み）。100 円単位に丸める。
+function quantilesAround(level: number, spread: number): number[] {
+  return Array.from({ length: 21 }, (_, i) =>
+    Math.max(0, Math.round((level * (1 - spread + (i / 20) * 2 * spread)) / 100) * 100),
+  );
+}
+
 // コードから決まる疑似乱数。ビルドのたびに同じ値になる。
 function random(seed: string): () => number {
   let state = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 2166136261);
@@ -531,7 +538,29 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     };
   });
 
-  return { code, quarters, years, populationHistory, recentTransactions };
+  // 土地（宅地(土地)）の取引単価（円/㎡）。戸建の相場から土地分をおおまかに置き、地区ごとに差を付ける。
+  const baseUnit = ((seed.price * 10000) / 180) * 0.6;
+  const districts = Array.from({ length: 5 }, (_, i) => {
+    const level = baseUnit * (0.5 + rand() * 1.2);
+    return {
+      district: `サンプル地区 ${i + 1}`,
+      count: 5 + Math.floor(rand() * 40),
+      quantiles: quantilesAround(level, 0.35 + rand() * 0.3),
+      medianArea: round(150 + rand() * 150),
+    };
+  });
+  const landPrices = {
+    periodFrom: QUARTERS[QUARTERS.length - 8] ?? null,
+    periodTo: QUARTERS[QUARTERS.length - 1] ?? null,
+    total: {
+      count: districts.reduce((sum, d) => sum + d.count, 0),
+      quantiles: quantilesAround(baseUnit, 0.7),
+      medianArea: round(200 + rand() * 60),
+    },
+    districts,
+  };
+
+  return { code, quarters, years, populationHistory, landPrices, recentTransactions };
 }
 
 // 地図の地価ポイントと駅ごとの取引相場。市区町村の代表点のまわりに置く。

@@ -3,6 +3,10 @@
 // 各値の形は 2026-10 に API の実データで確かめた。
 
 const HOUSE_TYPE = "宅地(土地と建物)";
+// 土地だけの取引。㎡単価が付いているのはこの種類だけ（戸建は総額のみ）。
+const LAND_TYPE = "宅地(土地)";
+// 土地単価の分布に使う期間（8 四半期）。地区ごとに件数を確保するため、指標より長く取る。
+const LAND_MONTHS = 24;
 // 指標に使う期間（直近 4 四半期）と、推移に使う期間（過去 5 年）。
 const RECENT_MONTHS = 12;
 const HISTORY_MONTHS = 60;
@@ -255,10 +259,56 @@ export function metricsSql(dataset: string): MetricsSql {
     LEFT JOIN nearest USING (longitude, latitude)
     LEFT JOIN lines ON lines.group_code = nearest.station.group_code`;
 
+  // 土地の取引単価の分布。地区ごとと市区町村全体（district が NULL）。
+  // 分位は 0〜100% を 5% 刻みの 21 値で持ち、画面で「この単価は地区の下位何%か」を出す。
+  const districtLandPrices = `
+    CREATE OR REPLACE TABLE ${t("district_land_prices")} AS
+    WITH latest AS (SELECT MAX(period_start) AS quarter FROM ${t("raw_transactions")}),
+    land AS (
+      SELECT
+        LPAD(municipality_code, 5, '0') AS code,
+        IFNULL(district_name, '') AS district,
+        SAFE_CAST(unit_price AS INT64) AS unit_price,
+        SAFE_CAST(area AS FLOAT64) AS land_area
+      FROM ${t("raw_transactions")}, latest
+      WHERE type = '${LAND_TYPE}'
+        AND REGEXP_CONTAINS(municipality_code, r'^\\d{4,5}$')
+        AND SAFE_CAST(unit_price AS INT64) > 0
+        AND period_start > DATE_SUB(latest.quarter, INTERVAL ${LAND_MONTHS} MONTH)
+    ),
+    stats AS (
+      SELECT code, district, COUNT(*) AS count,
+        APPROX_QUANTILES(unit_price, 20) AS quantiles,
+        APPROX_QUANTILES(land_area, 2)[SAFE_OFFSET(1)] AS median_area
+      FROM land GROUP BY code, district
+      UNION ALL
+      SELECT code, NULL AS district, COUNT(*) AS count,
+        APPROX_QUANTILES(unit_price, 20) AS quantiles,
+        APPROX_QUANTILES(land_area, 2)[SAFE_OFFSET(1)] AS median_area
+      FROM land GROUP BY code
+    ),
+    period AS (
+      SELECT
+        DATE_ADD(DATE_SUB(quarter, INTERVAL ${LAND_MONTHS} MONTH), INTERVAL 3 MONTH) AS from_date,
+        quarter AS to_date
+      FROM latest
+    )
+    SELECT
+      stats.*,
+      FORMAT('%dQ%d', EXTRACT(YEAR FROM from_date), EXTRACT(QUARTER FROM from_date)) AS period_from,
+      FORMAT('%dQ%d', EXTRACT(YEAR FROM to_date), EXTRACT(QUARTER FROM to_date)) AS period_to
+    FROM stats, period`;
+
   return {
-    rebuild: [areaMetrics, areaDetails, landPricePoints, stationMetrics],
+    rebuild: [areaMetrics, areaDetails, districtLandPrices, landPricePoints, stationMetrics],
     exports: (bucket, exportId) =>
-      ["area_metrics", "area_details", "land_price_points", "station_metrics"].map(
+      [
+        "area_metrics",
+        "area_details",
+        "district_land_prices",
+        "land_price_points",
+        "station_metrics",
+      ].map(
         (name) => `
           EXPORT DATA OPTIONS (
             uri = 'gs://${bucket}/exports/${name}/*.json',

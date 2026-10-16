@@ -43,6 +43,16 @@ export const AreaMetricsFile = z.object({
 });
 export type AreaMetricsFile = z.infer<typeof AreaMetricsFile>;
 
+// 土地（宅地(土地)）の取引単価（円/㎡）の分布。0%〜100% を 5% 刻みで 21 個持ち（BigQuery の APPROX_QUANTILES(x, 20)）、
+// 画面で「この単価は地区の下位何%か」を出す。中央値は 11 番目（添字 10）。
+export const LAND_QUANTILE_STEPS = 20;
+export const LandPriceStats = z.object({
+  count: z.number().int().positive(),
+  quantiles: z.array(z.number().nonnegative()).length(LAND_QUANTILE_STEPS + 1),
+  medianArea: z.number().nonnegative().nullable(), // 取引された土地の面積の中央値（㎡）
+});
+export type LandPriceStats = z.infer<typeof LandPriceStats>;
+
 // 市区町村の詳細（市区町村ごとのファイル）。
 export const AreaDetail = z.object({
   code: MunicipalityCode,
@@ -66,6 +76,13 @@ export const AreaDetail = z.object({
   populationHistory: z.array(
     z.object({ year: z.number().int(), population: z.number().int().nonnegative() }),
   ),
+  // 土地の取引単価。市区町村全体と、地区（大字・町名）ごと。期間は直近 8 四半期
+  landPrices: z.object({
+    periodFrom: QuarterLabel.nullable(),
+    periodTo: QuarterLabel.nullable(),
+    total: LandPriceStats.nullable(),
+    districts: z.array(LandPriceStats.extend({ district: z.string() })),
+  }),
   // 直近の取引（新しい順）
   recentTransactions: z.array(
     z.object({

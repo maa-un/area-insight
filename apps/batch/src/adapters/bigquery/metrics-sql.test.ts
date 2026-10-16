@@ -5,11 +5,12 @@ import { metricsSql } from "./metrics-sql.js";
 describe("metricsSql", () => {
   const sql = metricsSql("proj.ds");
 
-  it("rebuilds the four metric tables from the raw tables", () => {
+  it("rebuilds the five metric tables from the raw tables", () => {
     const targets = sql.rebuild.map((q) => /CREATE OR REPLACE TABLE `([^`]+)`/.exec(q)?.[1]);
     expect(targets).toEqual([
       "proj.ds.area_metrics",
       "proj.ds.area_details",
+      "proj.ds.district_land_prices",
       "proj.ds.land_price_points",
       "proj.ds.station_metrics",
     ]);
@@ -18,7 +19,7 @@ describe("metricsSql", () => {
 
   it("exports each table with the export id to its own folder", () => {
     const exports = sql.exports("bucket-1", "2026-10-16T00:00:00.000Z");
-    expect(exports).toHaveLength(4);
+    expect(exports).toHaveLength(5);
     expect(exports[0]).toContain("gs://bucket-1/exports/area_metrics/*.json");
     expect(exports[0]).toContain("'2026-10-16T00:00:00.000Z' AS export_id");
   });
@@ -28,7 +29,7 @@ describe("metricsSql", () => {
   });
 
   it("names each station point after the nearest station line", () => {
-    const stationMetrics = sql.rebuild[3] ?? "";
+    const stationMetrics = sql.rebuild[4] ?? "";
     expect(stationMetrics).toContain("`proj.ds.raw_stations`");
     expect(stationMetrics).toContain(
       "ST_DWITHIN(ST_GEOGPOINT(p.longitude, p.latitude), s.geography, 300)",
@@ -45,5 +46,12 @@ describe("metricsSql", () => {
     expect(all).toContain("JSON_TYPE(categories) = 'string'");
     expect(all).toContain("JSON_TYPE(properties) = 'string'");
     expect(all).not.toMatch(/JSON_VALUE\((properties|categories), '\$/);
+  });
+
+  it("builds land price distributions per district and for the whole municipality", () => {
+    const district = sql.rebuild[2] ?? "";
+    expect(district).toContain("type = '宅地(土地)'");
+    expect(district).toContain("APPROX_QUANTILES(unit_price, 20)");
+    expect(district).toContain("NULL AS district");
   });
 });

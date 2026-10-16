@@ -82,6 +82,28 @@ const exportRows = {
       location: "長野県松本市宮渕１丁目",
     },
   ],
+  district_land_prices: [
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      code: "20202",
+      district: null,
+      count: "120",
+      quantiles: Array.from({ length: 21 }, (_, i) => String(10000 + i * 5000)),
+      median_area: "210.5",
+      period_from: "2024Q3",
+      period_to: "2026Q2",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      code: "20202",
+      district: "大字里山辺",
+      count: "43",
+      quantiles: Array.from({ length: 21 }, (_, i) => String(8000 + i * 5000)),
+      median_area: "190",
+      period_from: "2024Q3",
+      period_to: "2026Q2",
+    },
+  ],
   station_metrics: [
     {
       export_id: "2026-10-16T00:00:00.000Z",
@@ -141,5 +163,24 @@ describe("prepare-data", () => {
       [137.97, 36.23],
       [137.6, 35.9],
     ]);
+  });
+
+  it("attaches land price distributions to each area and falls back to empty", () => {
+    const data = convert(exportRows);
+    const detail = AreaDetail.parse(data.details[0]);
+    expect(detail.landPrices.periodFrom).toBe("2024Q3");
+    expect(detail.landPrices.total?.count).toBe(120);
+    expect(detail.landPrices.total?.quantiles[10]).toBe(60000);
+    expect(detail.landPrices.districts).toEqual([
+      expect.objectContaining({ district: "大字里山辺", count: 43, medianArea: 190 }),
+    ]);
+
+    const without = convert({ ...exportRows, district_land_prices: [] });
+    expect(AreaDetail.parse(without.details[0]).landPrices).toEqual({
+      periodFrom: null,
+      periodTo: null,
+      total: null,
+      districts: [],
+    });
   });
 });

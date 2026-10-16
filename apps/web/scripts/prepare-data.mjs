@@ -9,7 +9,13 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const TABLES = ["area_metrics", "area_details", "land_price_points", "station_metrics"];
+const TABLES = [
+  "area_metrics",
+  "area_details",
+  "district_land_prices",
+  "land_price_points",
+  "station_metrics",
+];
 
 // BigQuery の JSON 書き出しは INT64 を文字列にするため、数値に戻す。
 const num = (value) => (value === null || value === undefined ? null : Number(value));
@@ -26,11 +32,38 @@ export function centersOf(boundaries) {
   return new Map(boundaries.features.map((f) => [f.properties.code, f.properties.center]));
 }
 
+// 土地の取引単価の分布を、市区町村コード → { periodFrom, periodTo, total, districts } にまとめる。
+// district が null の行は市区町村全体。
+export function landPricesByCode(rows) {
+  const byCode = new Map();
+  for (const row of latestRows(rows)) {
+    const entry = byCode.get(row.code) ?? {
+      periodFrom: row.period_from ?? null,
+      periodTo: row.period_to ?? null,
+      total: null,
+      districts: [],
+    };
+    const stats = {
+      count: num(row.count),
+      quantiles: (row.quantiles ?? []).map(Number),
+      medianArea: num(row.median_area),
+    };
+    if (row.district === null || row.district === undefined) entry.total = stats;
+    else entry.districts.push({ district: row.district, ...stats });
+    byCode.set(row.code, entry);
+  }
+  for (const entry of byCode.values()) entry.districts.sort((a, b) => b.count - a.count);
+  return byCode;
+}
+
+const NO_LAND_PRICES = { periodFrom: null, periodTo: null, total: null, districts: [] };
+
 export function convert(
-  { area_metrics, area_details, land_price_points, station_metrics },
+  { area_metrics, area_details, district_land_prices = [], land_price_points, station_metrics },
   centers = new Map(),
 ) {
   const metrics = latestRows(area_metrics);
+  const landPrices = landPricesByCode(district_land_prices);
   const asOf = metrics.map((row) => row.as_of).find(Boolean);
   return {
     metrics: {
@@ -52,6 +85,7 @@ export function convert(
     },
     details: latestRows(area_details).map((row) => ({
       code: row.code,
+      landPrices: landPrices.get(row.code) ?? NO_LAND_PRICES,
       quarters: (row.quarters ?? []).map((q) => ({
         period: q.period,
         price: num(q.price),

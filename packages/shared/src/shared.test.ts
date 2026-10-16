@@ -3,6 +3,7 @@ import {
   AreaDetail,
   AreaMetricsFile,
   CompareList,
+  LandPriceStats,
   MunicipalityCode,
   PREFECTURE_CODES,
   PrefectureCode,
@@ -88,5 +89,11 @@ describe("AreaMetricsFile", () => {
       AreaDetail.safeParse({ ...detail, years: [], populationHistory: [], recentTransactions: [] })
         .success,
     ).toBe(false);
+  });
+
+  it("requires 21 quantiles for a land price distribution", () => {
+    const stats = { count: 3, quantiles: Array.from({ length: 21 }, () => 1), medianArea: null };
+    expect(LandPriceStats.safeParse(stats).success).toBe(true);
+    expect(LandPriceStats.safeParse({ ...stats, quantiles: [1, 2, 3] }).success).toBe(false);
   });
 });
