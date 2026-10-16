@@ -1,6 +1,7 @@
 import { type AreaDetail, prefectureName, RELIABLE_TRADE_COUNT } from "@area-insight/shared";
 import { ArrowUpRight, ChevronRight, Map as MapIcon } from "lucide-react";
 import { AreaActions } from "@/components/area-actions";
+import { Chip, Eyebrow, PositionBar } from "@/components/brand";
 import { LandPriceSection } from "@/components/land-prices";
 import { TrendChart, yearName } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
   NO_DATA,
 } from "@/lib/format";
 import { propfolioUrl } from "@/lib/propfolio";
+import { areaVerdict } from "@/lib/verdict";
 import { areaPath } from "@/routes";
 
 const SUMMARY: { key: MetricKey; note: string }[] = [
@@ -30,6 +32,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
   if (!area) return null;
   const prefecture = prefectureName(area.prefectureCode);
   const reference = area.tradeCount < RELIABLE_TRADE_COUNT;
+  const verdict = areaVerdict(area, prefecture, prefectureRank(area, "tradePrice"));
 
   return (
     <article className="flex flex-col gap-8">
@@ -45,12 +48,27 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         <span className="text-foreground">{area.name}</span>
       </nav>
 
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <p className="text-sm text-muted-foreground">{prefecture}</p>
-          <h1 className="text-3xl font-bold tracking-tight">{area.name}の中古戸建・空き家の相場</h1>
+      <header className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-2">
+            <Eyebrow>{prefecture}</Eyebrow>
+            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">{area.name}</h1>
+            <p className="text-muted-foreground">中古戸建・空き家の相場と、土地の高い・安い</p>
+          </div>
+          <AreaActions code={area.code} />
         </div>
-        <AreaActions code={area.code} />
+        {verdict && (
+          <div className="flex flex-col gap-3 rounded-xl border border-terracotta/30 bg-card p-5">
+            <p className="text-lg font-bold leading-snug sm:text-xl">{verdict.sentence}</p>
+            <div className="flex flex-wrap gap-2">
+              {verdict.tags.map((tag) => (
+                <Chip key={tag.label} tone={tag.tone}>
+                  {tag.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
       <section aria-label="主な指標" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -60,7 +78,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
             <Card key={key} className="gap-2 py-4">
               <CardHeader className="px-4">
                 <CardDescription>{METRICS[key].label}</CardDescription>
-                <CardTitle className="flex items-center gap-2 text-2xl tabular-nums">
+                <CardTitle className="flex items-center gap-2 text-3xl font-extrabold tabular-nums">
                   {formatMetric(key, area[key])}
                   {key === "tradePrice" && reference && area.tradePrice !== null && (
                     <Badge variant="outline">参考値</Badge>
@@ -71,9 +89,14 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
                 <p>{note}</p>
                 {key === "tradePrice" && <p>取引件数 {formatCount(area.tradeCount, "件")}</p>}
                 {rank && (
-                  <p>
-                    {prefecture}内 {rank.total} 市区町村中 {rank.rank} 位
-                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    <p>
+                      {prefecture}内 {rank.total} 市区町村中 {rank.rank} 位
+                    </p>
+                    <PositionBar
+                      percent={rank.total > 1 ? ((rank.rank - 1) / (rank.total - 1)) * 100 : 50}
+                    />
+                  </div>
                 )}
               </CardContent>
             </Card>

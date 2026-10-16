@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { dataset } from "./data";
 import { pages, render } from "./entry-server";
 import { pageOfPath } from "./routes";
 
@@ -12,8 +13,9 @@ describe("prerender", () => {
 
   it("renders the home page with the sample notice and sources", () => {
     const html = render(find("home").route);
-    expect(html).toContain("公的データで比べる");
-    expect(html).toContain("サンプル");
+    expect(html).toContain("市区町村を公的データで");
+    // 実データを置いた手元のビルドではサンプルの注意書きは出ない
+    if (dataset.sample) expect(html).toContain("サンプル");
     expect(html).toContain("不動産情報ライブラリ");
   });
 
@@ -38,9 +40,11 @@ describe("prerender", () => {
     expect(render(version.route)).toContain(`v${__APP_VERSION__}`);
   });
 
+  // 同じ都道府県に同名の市区町村がある場合（北海道の泊村）だけは、title が重なってよい。
   it("gives every page a distinct title", () => {
     const titles = all.map((p) => p.head.title);
-    expect(new Set(titles).size).toBe(titles.length);
+    const duplicates = titles.filter((t, i) => titles.indexOf(t) !== i);
+    expect(duplicates.every((t) => t.startsWith("北海道泊村"))).toBe(true);
   });
 
   it("renders the error pages without URLs", () => {

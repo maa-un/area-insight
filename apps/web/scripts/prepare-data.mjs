@@ -32,6 +32,22 @@ export function centersOf(boundaries) {
   return new Map(boundaries.features.map((f) => [f.properties.code, f.properties.center]));
 }
 
+// 政令指定都市の区は区名だけで届く（例: 神奈川県の「緑区」は横浜市と相模原市にある）ため、市名を前に付けて
+// 「横浜市緑区」にする。区は、同じ都道府県で区のコードより小さい最大の「市」（コードの 3 桁目が 1）に属する。
+// 東京 23 区は属する市が無いのでそのまま。
+export function fullNames(rows) {
+  const cities = rows.filter((r) => r.code[2] === "1" && r.name.endsWith("市"));
+  return new Map(
+    rows.map((r) => {
+      if (r.code[2] !== "1" || !r.name.endsWith("区")) return [r.code, r.name];
+      const city = cities
+        .filter((c) => c.prefecture_code === r.prefecture_code && c.code < r.code)
+        .sort((a, b) => (a.code < b.code ? 1 : -1))[0];
+      return [r.code, city ? `${city.name}${r.name}` : r.name];
+    }),
+  );
+}
+
 // 土地の取引単価の分布を、市区町村コード → { periodFrom, periodTo, total, districts } にまとめる。
 // district が null の行は市区町村全体。
 export function landPricesByCode(rows) {
@@ -63,6 +79,7 @@ export function convert(
   centers = new Map(),
 ) {
   const metrics = latestRows(area_metrics);
+  const names = fullNames(metrics);
   const landPrices = landPricesByCode(district_land_prices);
   const asOf = metrics.map((row) => row.as_of).find(Boolean);
   return {
@@ -72,7 +89,7 @@ export function convert(
       areas: metrics.map((row) => ({
         code: row.code,
         prefectureCode: row.prefecture_code,
-        name: row.name,
+        name: names.get(row.code),
         tradePrice: num(row.trade_price),
         tradeCount: num(row.trade_count) ?? 0,
         vacancyRate: num(row.vacancy_rate),
@@ -128,6 +145,7 @@ export function convert(
   };
 }
 
+// テーブルの書き出し（NDJSON）を読む。
 async function readTable(dir, name) {
   const folder = join(dir, "exports", name);
   const files = (await readdir(folder).catch(() => [])).filter((file) => file.endsWith(".json"));
@@ -144,16 +162,26 @@ async function main(dir) {
   const tables = Object.fromEntries(
     await Promise.all(TABLES.map(async (name) => [name, await readTable(dir, name)])),
   );
+  const files = Object.fromEntries(
+    await Promise.all(
+      TABLES.map(async (name) => [
+        name,
+        (await readdir(join(dir, "exports", name)).catch(() => [])).some((f) =>
+          f.endsWith(".json"),
+        ),
+      ]),
+    ),
+  );
   if (tables.area_metrics.length === 0) {
     console.log("no exports found; building with sample data");
     return;
   }
-  // 書き出しの途中（EXPORT DATA が古いファイルを消してから書く間）に取ると、一部のテーブルだけ空になる。
-  // そのまま作ると画面から項目が消えるため、ビルドを失敗させる。
-  const missing = TABLES.filter((name) => tables[name].length === 0);
+  // 書き出しの途中（EXPORT DATA が古いファイルを消してから書く間）に取ると、一部のテーブルのファイルが無くなる。
+  // そのまま作ると画面から項目が消えるため、ビルドを失敗させる。行が 0 のファイルは正常（例: 地価の取り込み前）。
+  const missing = TABLES.filter((name) => !files[name]);
   if (missing.length > 0) {
     throw new Error(
-      `exports are incomplete (no rows): ${missing.join(", ")}; retry after the aggregate job finishes`,
+      `exports are incomplete (no files): ${missing.join(", ")}; retry after the aggregate job finishes`,
     );
   }
   const boundaries = JSON.parse(

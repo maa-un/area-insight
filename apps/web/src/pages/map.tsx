@@ -20,7 +20,7 @@ import {
   formatYenPerTsubo,
 } from "@/lib/format";
 import type { LayerId, MapController, Selection } from "@/lib/map-engine";
-import { NO_DATA_COLOR, quantileScale, SCALE_COLORS } from "@/lib/map-scale";
+import { NO_DATA_COLOR, quantileScale, SCALE_COLORS, STATION_COLOR } from "@/lib/map-scale";
 import { replaceSearchParams, useSearchParams } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { areaPath } from "@/routes";
@@ -30,7 +30,7 @@ const AREA_METRICS = Object.keys(METRICS).filter((k) => k !== "population") as M
 const LAYERS: { id: LayerId; label: string; swatch: string }[] = [
   { id: "areas", label: "市区町村の塗り分け", swatch: SCALE_COLORS[3] },
   { id: "land", label: "地価公示・地価調査の地点", swatch: SCALE_COLORS[1] },
-  { id: "stations", label: "駅ごとの取引相場", swatch: "#f97316" },
+  { id: "stations", label: "駅ごとの取引相場", swatch: STATION_COLOR },
 ];
 
 const landScale = quantileScale(landPrices.map((p) => p.price));

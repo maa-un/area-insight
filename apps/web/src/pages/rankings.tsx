@@ -6,6 +6,7 @@ import {
 } from "@area-insight/shared";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Bookmark, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { Bar } from "@/components/brand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,6 +68,7 @@ export function RankingsPage() {
   const ranked = rankableAreas(inPrefecture, metric, includeReference);
   const hidden = inPrefecture.length - ranked.length;
   const rows = sortAreas(ranked, metric, order);
+  const max = Math.max(...rows.map((a) => Math.abs(a[metric] ?? 0)), 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -157,7 +159,12 @@ export function RankingsPage() {
           <tbody className="tabular-nums">
             {rows.map((area, i) => (
               <tr key={area.code} className="border-t hover:bg-muted/30">
-                <td className="px-3 py-2.5 text-muted-foreground">
+                <td
+                  className={cn(
+                    "px-3 py-2.5 font-bold tabular-nums",
+                    i < 3 ? "text-terracotta" : "text-muted-foreground",
+                  )}
+                >
                   {area[metric] === null ? "—" : i + 1}
                 </td>
                 <td className="px-3 py-2.5">
@@ -171,13 +178,21 @@ export function RankingsPage() {
                 {COLUMNS.map((key) => (
                   <td
                     key={key}
-                    className={cn("px-3 py-2.5 text-right", key === metric && "font-semibold")}
+                    className={cn("px-3 py-2.5 text-right", key === metric && "font-bold")}
                   >
                     {formatMetric(key, area[key])}
                     {key === "tradePrice" && area.tradeCount < RELIABLE_TRADE_COUNT && (
                       <Badge variant="outline" className="ml-1.5">
                         参考値
                       </Badge>
+                    )}
+                    {key === metric && (
+                      <Bar
+                        value={Math.abs(area[key] ?? 0)}
+                        max={max}
+                        highlight={i < 3}
+                        className="mt-1.5 ml-auto w-24"
+                      />
                     )}
                   </td>
                 ))}
