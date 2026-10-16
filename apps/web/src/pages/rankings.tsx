@@ -5,11 +5,29 @@ import {
   prefectureName,
   RELIABLE_TRADE_COUNT,
 } from "@area-insight/shared";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, Bookmark, X } from "lucide-react";
-import type { ReactNode } from "react";
-import { Bar } from "@/components/brand";
+import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  Bookmark,
+  Check,
+  ListOrdered,
+  Plus,
+  X,
+} from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
+import { Bar, PageHeader } from "@/components/brand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   BASIC_METRICS,
   DISTORTION_METRICS,
@@ -79,53 +97,68 @@ export function RankingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">ランキング</h1>
-        <p className="text-muted-foreground">{describe(conditions)}</p>
-      </header>
+      <PageHeader
+        icon={ListOrdered}
+        eyebrow={`${rows.length.toLocaleString("ja-JP")} 市区町村`}
+        title="ランキング"
+        description={describe(conditions)}
+      />
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-end gap-3 border-y bg-background/85 px-4 py-3 backdrop-blur-xl animate-rise [animation-delay:80ms] sm:mx-0 sm:rounded-2xl sm:border sm:bg-card/85 lg:top-4">
         <Field label="指標">
-          <select
-            className={selectClass}
+          <Select
             value={metric}
-            onChange={(e) => replaceSearchParams({ metric: e.target.value, order: undefined })}
+            onValueChange={(value) => replaceSearchParams({ metric: value, order: undefined })}
           >
-            <optgroup label="指標">
-              {BASIC_METRICS.map((key) => (
-                <option key={key} value={key}>
-                  {METRICS[key].label}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="市場の歪み">
-              {DISTORTION_METRICS.map((key) => (
-                <option key={key} value={key}>
-                  {METRICS[key].label}
-                </option>
-              ))}
-            </optgroup>
-          </select>
+            <SelectTrigger className="h-9 min-w-48 bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>指標</SelectLabel>
+                {BASIC_METRICS.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {METRICS[key].label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              <SelectGroup>
+                <SelectLabel>市場の歪み</SelectLabel>
+                {DISTORTION_METRICS.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {METRICS[key].label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="都道府県">
-          <select
-            className={selectClass}
-            value={pref ?? ""}
-            onChange={(e) => replaceSearchParams({ pref: e.target.value })}
+          <Select
+            value={pref ?? ALL}
+            onValueChange={(value) => replaceSearchParams({ pref: value === ALL ? "" : value })}
           >
-            <option value="">全国</option>
-            {PREFECTURES.map((code) => (
-              <option key={code} value={code}>
-                {prefectureName(code)}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 min-w-32 bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>全国</SelectItem>
+              {PREFECTURES.map((code) => (
+                <SelectItem key={code} value={code}>
+                  {prefectureName(code)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Button
           variant="outline"
+          className="h-9 bg-background"
           onClick={() => replaceSearchParams({ order: order === "asc" ? "desc" : "asc" })}
         >
-          {order === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
+          <span key={order} className="flex animate-in spin-in-90 fade-in duration-300">
+            {order === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
+          </span>
           {order === "asc" ? "低い順" : "高い順"}
         </Button>
         <SavedFilters current={conditions} />
@@ -142,12 +175,11 @@ export function RankingsPage() {
 
       {isTradeMetric(metric) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              className="size-4 accent-primary"
+          <label htmlFor="include-reference" className="flex items-center gap-2 font-medium">
+            <Switch
+              id="include-reference"
               checked={includeReference}
-              onChange={(e) => replaceSearchParams({ ref: e.target.checked ? "1" : undefined })}
+              onCheckedChange={(checked) => replaceSearchParams({ ref: checked ? "1" : undefined })}
             />
             参考値も含める
           </label>
@@ -159,17 +191,20 @@ export function RankingsPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-2xl border bg-card animate-rise [animation-delay:160ms]">
         <table className="w-full min-w-[760px] text-sm">
-          <thead className="bg-muted/50 text-left text-muted-foreground">
+          <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
               <th className="w-12 px-3 py-2.5 font-medium">順位</th>
-              <th className="px-3 py-2.5 font-medium">市区町村</th>
+              <th className="px-3 py-3 font-medium">市区町村</th>
               {columns.map((key) => (
-                <th key={key} className="px-3 py-2.5 text-right font-medium">
+                <th key={key} className="px-3 py-3 text-right font-medium">
                   <button
                     type="button"
-                    className={cn("hover:text-foreground", key === metric && "text-foreground")}
+                    className={cn(
+                      "rounded-md px-1 py-0.5 text-right transition-colors hover:bg-muted hover:text-foreground",
+                      key === metric && "text-primary",
+                    )}
                     onClick={() => replaceSearchParams({ metric: key, order: undefined })}
                   >
                     {METRICS[key].label}
@@ -179,24 +214,39 @@ export function RankingsPage() {
                   </button>
                 </th>
               ))}
-              <th className="px-3 py-2.5">
+              <th className="px-3 py-3">
                 <span className="sr-only">比較</span>
               </th>
             </tr>
           </thead>
           <tbody className="tabular-nums">
             {rows.map((area, i) => (
-              <tr key={area.code} className="border-t hover:bg-muted/30">
-                <td
-                  className={cn(
-                    "px-3 py-2.5 font-bold tabular-nums",
-                    i < 3 ? "text-terracotta" : "text-muted-foreground",
+              <tr
+                key={`${metric}-${order}-${area.code}`}
+                className="stagger group border-t transition-colors hover:bg-accent/50"
+                style={{ "--i": i } as CSSProperties}
+              >
+                <td className="px-3 py-3">
+                  {area[metric] === null ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : (
+                    <span
+                      className={cn(
+                        "flex size-7 items-center justify-center rounded-full text-xs font-bold tabular-nums",
+                        i < 3
+                          ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {i + 1}
+                    </span>
                   )}
-                >
-                  {area[metric] === null ? "—" : i + 1}
                 </td>
-                <td className="px-3 py-2.5">
-                  <a href={areaPath(area.code)} className="font-medium hover:underline">
+                <td className="px-3 py-3">
+                  <a
+                    href={areaPath(area.code)}
+                    className="font-semibold transition-colors group-hover:text-primary"
+                  >
                     {area.name}
                   </a>
                   <span className="ml-1.5 text-xs text-muted-foreground">
@@ -227,7 +277,7 @@ export function RankingsPage() {
                     )}
                   </td>
                 ))}
-                <td className="px-3 py-2.5 text-right">
+                <td className="px-3 py-3 text-right">
                   <CompareToggle code={area.code} />
                 </td>
               </tr>
@@ -239,16 +289,15 @@ export function RankingsPage() {
   );
 }
 
-const selectClass =
-  "h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none";
+// Radix の Select は空文字を値にできないため、「全国」を表す値を別に持つ
+const ALL = "all";
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    // biome-ignore lint/a11y/noLabelWithoutControl: 子要素の select を包んで関連付けている
-    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
       {label}
       {children}
-    </label>
+    </div>
   );
 }
 
@@ -256,7 +305,13 @@ function CompareToggle({ code }: { code: string }) {
   const { compare } = useUserData();
   const added = compare.includes(code);
   return (
-    <Button size="sm" variant={added ? "secondary" : "ghost"} onClick={() => toggleCompare(code)}>
+    <Button
+      size="sm"
+      variant={added ? "secondary" : "ghost"}
+      className={cn(added && "text-primary")}
+      onClick={() => toggleCompare(code)}
+    >
+      {added ? <Check className="animate-in zoom-in" /> : <Plus />}
       {added ? "比較中" : "比較に追加"}
     </Button>
   );

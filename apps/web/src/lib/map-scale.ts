@@ -1,9 +1,9 @@
 // 地図の色分け。値を 5 段階（分位）に分け、凡例と地図で同じ区切りを使う。
-// ブランドの配色に合わせ、淡いクリームから濃いテラコッタへ。
-export const SCALE_COLORS = ["#efe9dd", "#dac6b1", "#bf997b", "#9a6a4c", "#6b4530"] as const;
-export const NO_DATA_COLOR = "#d9d3c7";
-// 駅ごとの取引相場の点。濃インクにクリームの縁
-export const STATION_COLOR = "#2a2622";
+// ブランドの差し色に合わせ、淡いピーチから濃いテラコッタへ。
+export const SCALE_COLORS = ["#fbe8dc", "#f5bf9f", "#ea8f66", "#cf5d36", "#8c3519"] as const;
+export const NO_DATA_COLOR = "#e4e0da";
+// 駅ごとの取引相場の点。濃い墨色に白の縁
+export const STATION_COLOR = "#292524";
 
 export type Scale = { breaks: number[]; colorOf: (value: number | null) => string };
 

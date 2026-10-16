@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ComponentType, type ReactNode, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 // maa'un のブランドの部品。note・Shorts の図解と同じ作法で、数字を形で見せる。
@@ -34,7 +34,10 @@ export function Bar({
   return (
     <div className={cn("h-2 w-full overflow-hidden rounded-full bg-bar-bg", className)} aria-hidden>
       <div
-        className={cn("h-full rounded-full", highlight ? "bg-terracotta" : "bg-bar-muted")}
+        className={cn(
+          "h-full origin-left animate-grow-x rounded-full",
+          highlight ? "bg-terracotta" : "bg-bar-muted",
+        )}
         style={{ width: `${width}%` }}
       />
     </div>
@@ -54,7 +57,7 @@ export function PositionBar({
   return (
     <div className={cn("relative h-2 w-full rounded-full bg-bar-bg", className)} aria-hidden>
       <div
-        className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-cream bg-terracotta shadow-xs"
+        className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-terracotta shadow-xs"
         style={{ left: `${left}%` }}
       />
     </div>
@@ -82,6 +85,84 @@ export function Chip({
       )}
     >
       {children}
+    </span>
+  );
+}
+
+// ページの見出し。アイコン付きの小見出し・タイトル・説明と、右側の操作をまとめる。
+export function PageHeader({
+  icon: Icon,
+  eyebrow,
+  title,
+  description,
+  actions,
+}: {
+  icon?: ComponentType<{ className?: string }>;
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <header className="flex flex-col gap-4 animate-rise sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-2">
+        {(Icon || eyebrow) && (
+          <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            {Icon && (
+              <span className="flex size-6 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Icon className="size-3.5" />
+              </span>
+            )}
+            {eyebrow}
+          </p>
+        )}
+        <h1 className="text-2xl text-balance sm:text-3xl">{title}</h1>
+        {description && <p className="max-w-2xl text-sm text-muted-foreground">{description}</p>}
+      </div>
+      {actions}
+    </header>
+  );
+}
+
+// 数字を 0 から数え上げて見せる。サーバーで書き出した最終の文字列をそのまま使い、
+// 表示後に先頭の数値だけを書き換える（ハイドレーションの不一致を起こさない）。
+export function CountUp({ text, className }: { text: string; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    const match = /-?[\d,]+(\.\d+)?/.exec(text);
+    if (!node || !match || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const target = Number(match[0].replaceAll(",", ""));
+    if (!Number.isFinite(target) || target === 0) return;
+    const decimals = match[1] ? match[1].length - 1 : 0;
+    const comma = match[0].includes(",");
+    const format = (v: number) =>
+      comma
+        ? v.toLocaleString("ja-JP", {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          })
+        : v.toFixed(decimals);
+    const before = text.slice(0, match.index);
+    const after = text.slice(match.index + match[0].length);
+    const duration = 900;
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - (1 - t) ** 4;
+      node.textContent = `${before}${format(target * eased)}${after}`;
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      node.textContent = text;
+    };
+  }, [text]);
+  return (
+    <span ref={ref} className={className}>
+      {text}
     </span>
   );
 }

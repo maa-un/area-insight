@@ -150,7 +150,7 @@ export function createMap(
         paint: {
           "circle-color": ["get", "color"],
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 14, 8],
-          "circle-stroke-color": "#2a2622",
+          "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 1,
         },
       });
@@ -162,7 +162,7 @@ export function createMap(
         paint: {
           "circle-color": STATION_COLOR,
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 14, 10],
-          "circle-stroke-color": "#f5f2eb",
+          "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 2,
         },
       });

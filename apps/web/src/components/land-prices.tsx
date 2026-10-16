@@ -426,7 +426,7 @@ function LandPriceChecker({
           地区
           <select
             id={ids.district}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs"
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-xs transition-colors outline-none hover:border-primary/40 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             value={districtName}
             onChange={(e) => setDistrictName(e.target.value)}
           >

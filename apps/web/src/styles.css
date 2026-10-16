@@ -5,8 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading:
-    "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", "Noto Serif JP", Georgia, serif;
+  --font-heading: var(--font-sans);
   --font-sans:
     system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP",
     "Yu Gothic UI", sans-serif;
@@ -41,10 +40,6 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --color-ink: var(--ink);
-  --color-ink-deep: var(--ink-deep);
-  --color-cream: var(--cream);
-  --color-cream-text: var(--cream-text);
   --color-terracotta: var(--terracotta);
   --color-terracotta-soft: var(--terracotta-soft);
   --color-bar-bg: var(--bar-bg);
@@ -58,88 +53,109 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --animate-grow-x: grow-x 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-rise: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-float: float 14s ease-in-out infinite alternate;
 }
 
-/* maa'un のブランド配色を、ホテルのような落ち着いた色味に寄せたもの。
-   アイボリーの地・チャコールの文字・くすんだ赤銅（テラコッタを深く沈めた色）。彩度を抑え、罫線は細く薄く。 */
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes float {
+  to {
+    transform: translate3d(6%, -8%, 0) scale(1.15);
+  }
+}
+
+/* 一般の人が毎日開くアプリのような、明るく軽い配色。地は白に近い温かいグレー、差し色は maa'un のテラコッタを
+   鮮やかにしたもの。罫線は細く薄く、面の区切りは影ではなく 1px の線と余白で示す。 */
 :root {
-  --background: #f5f2eb;
-  --foreground: #2a2622;
-  --card: #fcfbf7;
-  --card-foreground: #2a2622;
-  --popover: #fcfbf7;
-  --popover-foreground: #2a2622;
-  --primary: #9a5a3e;
-  --primary-foreground: #f6f1e7;
-  --secondary: #e9e3d7;
-  --secondary-foreground: #2a2622;
-  --muted: #ede8de;
-  --muted-foreground: #7c7467;
-  --accent: #efeae0;
-  --accent-foreground: #2a2622;
-  --destructive: #9c574a;
-  --border: #e2dccf;
-  --input: #d6cfc0;
-  --ring: #9a5a3e;
-  --chart-1: #9a5a3e;
-  --chart-2: #2a2622;
-  --chart-3: #cfc6b5;
-  --chart-4: #6b8068;
-  --chart-5: #c9a28a;
-  --radius: 0.5rem;
-  --sidebar: #fcfbf7;
-  --sidebar-foreground: #2a2622;
-  --sidebar-primary: #9a5a3e;
-  --sidebar-primary-foreground: #f6f1e7;
-  --sidebar-accent: #ede8de;
-  --sidebar-accent-foreground: #2a2622;
-  --sidebar-border: #e2dccf;
-  --sidebar-ring: #9a5a3e;
-  /* ブランド固有の色。濃色面（フッターなど）とバーに使う。terracotta は差し色（赤銅）の名前として残す */
-  --ink: #2a2622;
-  --ink-deep: #1f1b18;
-  --cream: #f5f2eb;
-  --cream-text: #ece6da;
-  --terracotta: #9a5a3e;
-  --terracotta-soft: #c9a28a;
-  --bar-bg: #e7e1d5;
-  --bar-muted: #c9c0ae;
-  --good: #6b8068;
-  --bad: #9c574a;
+  --background: oklch(0.985 0.003 75);
+  --foreground: oklch(0.21 0.012 50);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.012 50);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.012 50);
+  --primary: oklch(0.62 0.165 42);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: oklch(0.96 0.006 70);
+  --secondary-foreground: oklch(0.25 0.012 50);
+  --muted: oklch(0.965 0.005 75);
+  --muted-foreground: oklch(0.53 0.014 60);
+  --accent: oklch(0.955 0.018 50);
+  --accent-foreground: oklch(0.36 0.09 40);
+  --destructive: oklch(0.58 0.2 27);
+  --border: oklch(0.915 0.007 70);
+  --input: oklch(0.89 0.008 70);
+  --ring: oklch(0.62 0.165 42);
+  --chart-1: oklch(0.62 0.165 42);
+  --chart-2: oklch(0.3 0.015 50);
+  --chart-3: oklch(0.85 0.012 70);
+  --chart-4: oklch(0.62 0.11 160);
+  --chart-5: oklch(0.78 0.09 50);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.975 0.004 75);
+  --sidebar-foreground: oklch(0.21 0.012 50);
+  --sidebar-primary: oklch(0.62 0.165 42);
+  --sidebar-primary-foreground: oklch(0.99 0.005 60);
+  --sidebar-accent: oklch(0.94 0.008 70);
+  --sidebar-accent-foreground: oklch(0.21 0.012 50);
+  --sidebar-border: oklch(0.915 0.007 70);
+  --sidebar-ring: oklch(0.62 0.165 42);
+  /* ブランド固有の色。terracotta は差し色の名前として残す */
+  --terracotta: var(--primary);
+  --terracotta-soft: oklch(0.8 0.08 48);
+  --bar-bg: oklch(0.945 0.007 70);
+  --bar-muted: oklch(0.82 0.02 60);
+  --good: oklch(0.56 0.12 158);
+  --bad: oklch(0.58 0.18 28);
 }
 
 .dark {
-  --background: #211c16;
-  --foreground: #f3e9d2;
-  --card: #2a241d;
-  --card-foreground: #f3e9d2;
-  --popover: #2a241d;
-  --popover-foreground: #f3e9d2;
-  --primary: #e2966e;
-  --primary-foreground: #211c16;
-  --secondary: #3a3127;
-  --secondary-foreground: #f3e9d2;
-  --muted: #3a3127;
-  --muted-foreground: #b8a98f;
-  --accent: #3a3127;
-  --accent-foreground: #f3e9d2;
-  --destructive: #e2966e;
-  --border: #f3e9d2 / 12%;
-  --input: #f3e9d2 / 18%;
-  --ring: #e2966e;
-  --chart-1: #e2966e;
-  --chart-2: #f3e9d2;
-  --chart-3: #8c7e68;
-  --chart-4: #5e8a5e;
-  --chart-5: #c4582c;
-  --sidebar: #2a241d;
-  --sidebar-foreground: #f3e9d2;
-  --sidebar-primary: #e2966e;
-  --sidebar-primary-foreground: #211c16;
-  --sidebar-accent: #3a3127;
-  --sidebar-accent-foreground: #f3e9d2;
-  --sidebar-border: #f3e9d2 / 12%;
-  --sidebar-ring: #e2966e;
+  --background: oklch(0.17 0.008 50);
+  --foreground: oklch(0.96 0.006 75);
+  --card: oklch(0.21 0.009 50);
+  --card-foreground: oklch(0.96 0.006 75);
+  --popover: oklch(0.21 0.009 50);
+  --popover-foreground: oklch(0.96 0.006 75);
+  --primary: oklch(0.7 0.15 45);
+  --primary-foreground: oklch(0.17 0.008 50);
+  --secondary: oklch(0.27 0.01 50);
+  --secondary-foreground: oklch(0.96 0.006 75);
+  --muted: oklch(0.25 0.01 50);
+  --muted-foreground: oklch(0.7 0.014 65);
+  --accent: oklch(0.28 0.03 45);
+  --accent-foreground: oklch(0.9 0.05 50);
+  --destructive: oklch(0.7 0.17 27);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.7 0.15 45);
+  --chart-1: oklch(0.7 0.15 45);
+  --chart-2: oklch(0.96 0.006 75);
+  --chart-3: oklch(0.45 0.015 60);
+  --chart-4: oklch(0.68 0.11 160);
+  --chart-5: oklch(0.6 0.1 50);
+  --sidebar: oklch(0.19 0.008 50);
+  --sidebar-foreground: oklch(0.96 0.006 75);
+  --sidebar-primary: oklch(0.7 0.15 45);
+  --sidebar-primary-foreground: oklch(0.17 0.008 50);
+  --sidebar-accent: oklch(0.26 0.01 50);
+  --sidebar-accent-foreground: oklch(0.96 0.006 75);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.7 0.15 45);
+  --terracotta-soft: oklch(0.55 0.08 48);
+  --bar-bg: oklch(0.27 0.01 50);
+  --bar-muted: oklch(0.45 0.015 60);
+  --good: oklch(0.7 0.12 158);
+  --bad: oklch(0.7 0.16 28);
 }
 
 @layer base {
@@ -147,22 +163,90 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
-  /* 見出しは明朝・中太で落ち着かせる。数字は本文のゴシックのまま */
   h1,
   h2,
   h3 {
-    @apply font-heading font-semibold;
-    letter-spacing: 0.01em;
+    @apply font-heading font-bold tracking-tight;
   }
   html {
     @apply font-sans;
+    /* 和文の約物を詰め、アプリの UI らしく引き締める */
+    font-feature-settings: "palt";
     /* 日本語を文節単位で折り返し、単語の途中で改行しないようにする（対応ブラウザのみ）。 */
     word-break: auto-phrase;
+  }
+  ::selection {
+    @apply bg-primary/20;
+  }
+}
+
+/* ページ移動を、アプリの画面遷移のように見せる（静的な複数ページのまま、対応ブラウザだけ）。
+   サイドバーとタブバーは動かさず、本文だけを入れ替える。 */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(page) {
+  animation: 160ms ease-in both page-out;
+}
+::view-transition-new(page) {
+  animation: 380ms cubic-bezier(0.22, 1, 0.36, 1) both page-in;
+}
+@keyframes page-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@utility vt-page {
+  view-transition-name: page;
+}
+@utility vt-sidebar {
+  view-transition-name: app-sidebar;
+}
+@utility vt-tabbar {
+  view-transition-name: app-tabbar;
+}
+
+/* 一覧やカードを、少しずつずらして浮かび上がらせる。--i に順番を渡す */
+@utility stagger {
+  animation: var(--animate-rise);
+  animation-delay: calc(min(var(--i, 0), 12) * 55ms);
+}
+
+/* 画面の下にある塊は、スクロールして見えたときに浮かび上がらせる（対応ブラウザだけ） */
+@utility reveal {
+  @supports (animation-timeline: view()) {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    /* biome-ignore lint/complexity/noImportantStyles: 動きを減らす設定を、個別の指定より優先する */
+    animation-duration: 1ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: 動きを減らす設定を、個別の指定より優先する */
+    animation-delay: 0ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: 動きを減らす設定を、個別の指定より優先する */
+    transition-duration: 1ms !important;
+  }
+  @view-transition {
+    navigation: none;
   }
 }
