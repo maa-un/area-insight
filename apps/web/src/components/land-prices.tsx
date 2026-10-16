@@ -8,8 +8,8 @@ import {
 } from "@area-insight/shared";
 import { Landmark, Scale, TrainFront } from "lucide-react";
 import { useId, useState } from "react";
+import { Pager } from "@/components/pager";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { dataset } from "@/data";
@@ -29,6 +29,7 @@ import {
   unitPriceOf,
   verdictOf,
 } from "@/lib/land-price";
+import { clampPage, pageSlice } from "@/lib/pagination";
 import { formatDataPeriod, formatLandPriceAsOf } from "@/lib/period";
 import { cn } from "@/lib/utils";
 
@@ -283,10 +284,12 @@ function DistrictTable({
   districts: District[];
   officialPrice: number | null;
 }) {
-  const [showAll, setShowAll] = useState(false);
-  const rows = showAll ? districts : districts.slice(0, DEFAULT_ROWS);
-  // 棒の長さの基準。上位 25% の最大値（極端な値に引きずられないよう、市区町村全体の 95% 点までに抑える）
-  const scaleMax = Math.max(total.quantiles[19] ?? 0, ...rows.map((d) => quartilesOf(d).p75));
+  const [requested, setPage] = useState(1);
+  const page = clampPage(requested, districts.length, DEFAULT_ROWS);
+  const rows = pageSlice(districts, page, DEFAULT_ROWS);
+  // 棒の長さの基準。上位 25% の最大値（極端な値に引きずられないよう、市区町村全体の 95% 点までに抑える）。
+  // ページを移っても棒の長さを比べられるよう、全地区で決める
+  const scaleMax = Math.max(total.quantiles[19] ?? 0, ...districts.map((d) => quartilesOf(d).p75));
 
   return (
     <div className="flex flex-col gap-3">
@@ -321,16 +324,13 @@ function DistrictTable({
           ))}
         </tbody>
       </table>
-      {districts.length > DEFAULT_ROWS && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="self-start"
-          onClick={() => setShowAll(!showAll)}
-        >
-          {showAll ? "件数の多い地区だけ表示" : `すべての地区を表示（${districts.length}）`}
-        </Button>
-      )}
+      <Pager
+        label="地区の一覧のページ"
+        page={page}
+        total={districts.length}
+        perPage={DEFAULT_ROWS}
+        onChange={setPage}
+      />
     </div>
   );
 }

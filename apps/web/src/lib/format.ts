@@ -83,6 +83,13 @@ export function formatQuarter(label: string): string {
   return `${year}年${start}〜${start + 2}月`;
 }
 
+// 路線名を並べる。大きな駅は 10 路線を超えるため、先頭の数路線だけを出して残りは数で示す。
+const SHOWN_LINES = 4;
+export function formatLines(lines: readonly string[], shownLines = SHOWN_LINES): string {
+  const shown = lines.slice(0, shownLines).join("・");
+  return lines.length > shownLines ? `${shown} ほか ${lines.length - shownLines} 路線` : shown;
+}
+
 // ランキング・比較で使う指標の表示。キーは data/index.ts の METRICS と同じ。
 export function formatMetric(key: string, value: number | null): string {
   switch (key) {

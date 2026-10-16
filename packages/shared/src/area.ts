@@ -104,6 +104,7 @@ export const DataSources = z.object({
   prefectureLandPrice: DataPeriod, // 地価調査の最新年。取り込む前は asOf が null
   stationLandTrade: DataPeriod, // 駅ごとの土地の坪単価（直近 8 四半期）
   populationProjection: DataPeriod, // 将来推計人口。取り込む前は asOf が null
+  condoTrade: DataPeriod, // マンションの成約事例（取り込んだ期間、既定は 5 年）。取り込む前は period が null
 });
 export type DataSources = z.infer<typeof DataSources>;
 
@@ -253,6 +254,48 @@ export type StationMetrics = z.infer<typeof StationMetrics>;
 
 export const LandPricePoints = z.array(LandPricePoint);
 export const StationMetricsList = z.array(StationMetrics);
+
+// マンションの成約事例（XPT001 の中古マンション等）。都道府県ごとのファイルで、成約事例のページが必要なときだけ読む。
+// XPT001 は物件の最寄り駅の位置に点を置き、駅からの距離を返さないため、駅ごとにまとめる。
+// 駅名と路線名は集計で最寄りの駅（XKT015）から付ける。近くに駅が見つからなければ name は null。
+export const CondoStation = z.object({
+  name: z.string().nullable(),
+  lines: z.array(z.string()),
+  cityName: z.string().nullable(), // 駅を最寄りとする取引の多い市区町村
+  coordinates: LngLat,
+});
+export type CondoStation = z.infer<typeof CondoStation>;
+
+// 価格の種類。0: 取引価格（国交省のアンケート）、1: 成約価格（レインズの成約情報）。
+export const CONDO_KIND_TRANSACTION = 0;
+export const CONDO_KIND_CONTRACT = 1;
+
+// 取引 1 件。件数が多い（東京都で 5 年に十数万件）ため、項目名を繰り返さない配列で持つ。
+export const CondoTrade = z.tuple([
+  z.number().int().nonnegative(), // 0: 駅（stations の添字）
+  QuarterLabel, // 1: 取引時期
+  z.number().positive(), // 2: 価格（万円）
+  z.number().positive(), // 3: 専有面積（㎡）
+  z.string(), // 4: 間取り（「3LDK」。無ければ空）
+  z.number().int().nullable(), // 5: 建築年（西暦）。「戦前」などは null
+  z.union([z.literal(CONDO_KIND_TRANSACTION), z.literal(CONDO_KIND_CONTRACT)]), // 6: 価格の種類
+  z.union([z.literal(0), z.literal(1)]).nullable(), // 7: 改装済みなら 1、未改装なら 0、不明は null
+  z.string(), // 8: 地区名（大字・町名）
+  z.string(), // 9: 建物の構造（「RC」「SRC」など）
+  z.string(), // 10: 取引の事情等（「関係者間取引」など。無ければ空）
+]);
+export type CondoTrade = z.infer<typeof CondoTrade>;
+
+export const CondoFile = z
+  .object({
+    prefectureCode: PrefectureCode,
+    stations: z.array(CondoStation),
+    trades: z.array(CondoTrade), // 新しい順
+  })
+  .refine((file) => file.trades.every((t) => t[0] < file.stations.length), {
+    message: "trade refers to a missing station",
+  });
+export type CondoFile = z.infer<typeof CondoFile>;
 
 // 市区町村の境界（apps/batch/scripts/build-boundaries.mjs の出力）。地図のページだけが読み込む。
 // 頂点は数十万あり、1 つずつ検証すると遅いため、座標の中身までは確かめない（MapLibre が描けない点は捨てる）。

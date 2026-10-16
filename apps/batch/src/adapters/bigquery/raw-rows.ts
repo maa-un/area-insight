@@ -166,6 +166,14 @@ export function stationTransactionRow(
   };
 }
 
+// 最寄り駅ごとのマンションの取引（XPT001 の中古マンション等）。指定した期間だけを持つ。
+export const RAW_CONDO_TRANSACTIONS: TableSpec = {
+  name: "raw_condo_transactions",
+  schema: RAW_STATION_TRANSACTIONS.schema,
+};
+
+export const condoTransactionRow = stationTransactionRow;
+
 // 駅（XKT015）。形（GeoJSON の geometry）と属性を JSON のまま持つ。最寄りの駅を探すのは集計の SQL で行う。
 export const RAW_STATIONS: TableSpec = {
   name: "raw_stations",

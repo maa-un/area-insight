@@ -30,6 +30,7 @@ describe("prerender", () => {
     expect(render(find("rankings").route)).toContain("ランキング");
     expect(render(find("compare").route)).toContain("比較する市区町村がありません");
     expect(render(find("map").route)).toContain("地図を読み込んでいます");
+    expect(render(find("condos").route)).toContain("マンションの成約事例");
     expect(render(find("privacy").route)).toContain("プライバシーポリシー");
   });
 
@@ -57,6 +58,7 @@ describe("pageOfPath", () => {
   it("maps paths to pages", () => {
     expect(pageOfPath("/")).toEqual({ page: "home" });
     expect(pageOfPath("/map")).toEqual({ page: "map" });
+    expect(pageOfPath("/condos/")).toEqual({ page: "condos" });
     expect(pageOfPath("/version")).toEqual({ page: "version" });
     expect(pageOfPath("/areas/13101/")).toEqual({ page: "area", code: "13101" });
     expect(pageOfPath("/nope/")).toEqual({ page: "not-found" });

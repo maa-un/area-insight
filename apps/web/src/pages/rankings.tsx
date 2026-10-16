@@ -14,8 +14,9 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useRef } from "react";
 import { Bar, PageHeader } from "@/components/brand";
+import { Pager } from "@/components/pager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,10 +45,19 @@ import {
 } from "@/data";
 import { useAuth } from "@/lib/auth";
 import { formatMetric } from "@/lib/format";
+import { clampPage, pageSlice } from "@/lib/pagination";
 import { replaceSearchParams, useSearchParams } from "@/lib/search-params";
 import { saveFilters, toggleCompare, useUserData } from "@/lib/user-data";
 import { cn } from "@/lib/utils";
 import { areaPath } from "@/routes";
+
+// 1 ページに並べる市区町村の数。全件（約 1,700）を一度に描くと、スクロールが終わらず探しにくい
+const PER_PAGE = 50;
+
+// 並べ方の条件を変えたら 1 ページ目に戻す
+function setConditions(params: Record<string, string | undefined>): void {
+  replaceSearchParams({ ...params, page: undefined });
+}
 
 // サンプルでは市区町村が少ないため、データのある都道府県だけを選択肢に出す。
 const PREFECTURES = PREFECTURE_CODES.filter((code) =>
@@ -83,7 +93,8 @@ function describe(c: Conditions): string {
 }
 
 export function RankingsPage() {
-  const conditions = conditionsOf(useSearchParams());
+  const params = useSearchParams();
+  const conditions = conditionsOf(params);
   const { metric, order, pref, includeReference } = conditions;
   const inPrefecture = pref
     ? dataset.areas.filter((a) => a.prefectureCode === pref)
@@ -91,6 +102,15 @@ export function RankingsPage() {
   const ranked = rankableAreas(inPrefecture, metric, includeReference);
   const hidden = inPrefecture.length - ranked.length;
   const rows = sortAreas(ranked, metric, order);
+  const page = clampPage(Number(params.get("page") ?? 1), rows.length, PER_PAGE);
+  const offset = (page - 1) * PER_PAGE;
+  const pageRows = pageSlice(rows, page, PER_PAGE);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const goTo = (next: number) => {
+    replaceSearchParams({ page: next === 1 ? undefined : String(next) });
+    // 表の先頭（固定の絞り込みバーの下）から見られるようにする
+    tableRef.current?.scrollIntoView({ block: "start" });
+  };
   // 表の列は基本の指標。歪みの指標を選んだときは、その列を先頭に足す
   const columns = isDistortionMetric(metric) ? [metric, ...BASIC_METRICS] : BASIC_METRICS;
   const max = Math.max(...rows.map((a) => Math.abs(a[metric] ?? 0)), 0);
@@ -108,7 +128,7 @@ export function RankingsPage() {
         <Field label="指標">
           <Select
             value={metric}
-            onValueChange={(value) => replaceSearchParams({ metric: value, order: undefined })}
+            onValueChange={(value) => setConditions({ metric: value, order: undefined })}
           >
             <SelectTrigger className="h-9 min-w-48 bg-background">
               <SelectValue />
@@ -136,7 +156,7 @@ export function RankingsPage() {
         <Field label="都道府県">
           <Select
             value={pref ?? ALL}
-            onValueChange={(value) => replaceSearchParams({ pref: value === ALL ? "" : value })}
+            onValueChange={(value) => setConditions({ pref: value === ALL ? "" : value })}
           >
             <SelectTrigger className="h-9 min-w-32 bg-background">
               <SelectValue />
@@ -154,7 +174,7 @@ export function RankingsPage() {
         <Button
           variant="outline"
           className="h-9 bg-background"
-          onClick={() => replaceSearchParams({ order: order === "asc" ? "desc" : "asc" })}
+          onClick={() => setConditions({ order: order === "asc" ? "desc" : "asc" })}
         >
           <span key={order} className="flex animate-in spin-in-90 fade-in duration-300">
             {order === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
@@ -179,7 +199,7 @@ export function RankingsPage() {
             <Switch
               id="include-reference"
               checked={includeReference}
-              onCheckedChange={(checked) => replaceSearchParams({ ref: checked ? "1" : undefined })}
+              onCheckedChange={(checked) => setConditions({ ref: checked ? "1" : undefined })}
             />
             参考値も含める
           </label>
@@ -191,7 +211,10 @@ export function RankingsPage() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border bg-card animate-rise [animation-delay:160ms]">
+      <div
+        ref={tableRef}
+        className="scroll-mt-40 overflow-x-auto rounded-2xl border bg-card animate-rise [animation-delay:160ms] lg:scroll-mt-28"
+      >
         <table className="w-full min-w-[760px] text-sm">
           <thead className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
@@ -205,7 +228,7 @@ export function RankingsPage() {
                       "rounded-md px-1 py-0.5 text-right transition-colors hover:bg-muted hover:text-foreground",
                       key === metric && "text-primary",
                     )}
-                    onClick={() => replaceSearchParams({ metric: key, order: undefined })}
+                    onClick={() => setConditions({ metric: key, order: undefined })}
                   >
                     {METRICS[key].label}
                     <span className="block text-[11px] font-normal text-muted-foreground">
@@ -220,71 +243,81 @@ export function RankingsPage() {
             </tr>
           </thead>
           <tbody className="tabular-nums">
-            {rows.map((area, i) => (
-              <tr
-                key={`${metric}-${order}-${area.code}`}
-                className="stagger group border-t transition-colors hover:bg-accent/50"
-                style={{ "--i": i } as CSSProperties}
-              >
-                <td className="px-3 py-3">
-                  {area[metric] === null ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : (
-                    <span
-                      className={cn(
-                        "flex size-7 items-center justify-center rounded-full text-xs font-bold tabular-nums",
-                        i < 3
-                          ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {i + 1}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-3">
-                  <a
-                    href={areaPath(area.code)}
-                    className="font-semibold transition-colors group-hover:text-primary"
-                  >
-                    {area.name}
-                  </a>
-                  <span className="ml-1.5 text-xs text-muted-foreground">
-                    {prefectureName(area.prefectureCode)}
-                  </span>
-                </td>
-                {columns.map((key) => (
-                  <td
-                    key={key}
-                    className={cn(
-                      "px-3 py-2.5 text-right whitespace-nowrap",
-                      key === metric && "font-bold",
-                    )}
-                  >
-                    {formatMetric(key, area[key])}
-                    {isTradeMetric(key) && area[key] !== null && isReferenceValue(area, key) && (
-                      <Badge variant="outline" className="ml-1.5">
-                        参考値
-                      </Badge>
-                    )}
-                    {key === metric && (
-                      <Bar
-                        value={Math.abs(area[key] ?? 0)}
-                        max={max}
-                        highlight={i < 3}
-                        className="mt-1.5 ml-auto w-24"
-                      />
+            {pageRows.map((area, index) => {
+              const i = offset + index;
+              return (
+                <tr
+                  key={`${metric}-${order}-${page}-${area.code}`}
+                  className="stagger group border-t transition-colors hover:bg-accent/50"
+                  style={{ "--i": index } as CSSProperties}
+                >
+                  <td className="px-3 py-3">
+                    {area[metric] === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "flex size-7 items-center justify-center rounded-full text-xs font-bold tabular-nums",
+                          i < 3
+                            ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {i + 1}
+                      </span>
                     )}
                   </td>
-                ))}
-                <td className="px-3 py-3 text-right">
-                  <CompareToggle code={area.code} />
-                </td>
-              </tr>
-            ))}
+                  <td className="px-3 py-3">
+                    <a
+                      href={areaPath(area.code)}
+                      className="font-semibold transition-colors group-hover:text-primary"
+                    >
+                      {area.name}
+                    </a>
+                    <span className="ml-1.5 text-xs text-muted-foreground">
+                      {prefectureName(area.prefectureCode)}
+                    </span>
+                  </td>
+                  {columns.map((key) => (
+                    <td
+                      key={key}
+                      className={cn(
+                        "px-3 py-2.5 text-right whitespace-nowrap",
+                        key === metric && "font-bold",
+                      )}
+                    >
+                      {formatMetric(key, area[key])}
+                      {isTradeMetric(key) && area[key] !== null && isReferenceValue(area, key) && (
+                        <Badge variant="outline" className="ml-1.5">
+                          参考値
+                        </Badge>
+                      )}
+                      {key === metric && (
+                        <Bar
+                          value={Math.abs(area[key] ?? 0)}
+                          max={max}
+                          highlight={i < 3}
+                          className="mt-1.5 ml-auto w-24"
+                        />
+                      )}
+                    </td>
+                  ))}
+                  <td className="px-3 py-3 text-right">
+                    <CompareToggle code={area.code} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+      <Pager
+        label="ランキングのページ"
+        page={page}
+        total={rows.length}
+        perPage={PER_PAGE}
+        onChange={goTo}
+      />
     </div>
   );
 }
@@ -344,7 +377,7 @@ function SavedFilters({ current }: { current: Conditions }) {
             type="button"
             className="py-1 pr-1 pl-3 hover:underline"
             onClick={() =>
-              replaceSearchParams({
+              setConditions({
                 metric: String(filter.conditions.metric ?? ""),
                 order: String(filter.conditions.order ?? ""),
                 pref: String(filter.conditions.pref ?? ""),

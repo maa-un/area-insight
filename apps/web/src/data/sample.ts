@@ -2,6 +2,8 @@ import type {
   AreaDetail,
   AreaMetrics,
   AreaMetricsFile,
+  CondoFile,
+  CondoTrade,
   LandPricePoint,
   LngLat,
   StationLandPrice,
@@ -445,6 +447,8 @@ export const SAMPLE_UPDATED_AT = "2026-10-16";
 const SAMPLE_TRADE_PERIOD = { from: "2025-10-01", to: "2026-09-30" };
 const SAMPLE_SURVEY = { source: "housing_survey", period: null, asOf: "2023-10-01" } as const;
 const SAMPLE_LAND_PERIOD = { from: "2024-10-01", to: "2026-09-30" };
+// マンションの成約事例は 5 年分（QUARTERS と同じ 2021Q4〜2026Q3）
+const SAMPLE_CONDO_PERIOD = { from: "2021-10-01", to: "2026-09-30" };
 // 公示地価の時点。駅の土地の坪単価はこの時点に補正した値として置く
 const SAMPLE_OFFICIAL_AS_OF = "2026-01-01";
 
@@ -586,6 +590,7 @@ export const sampleMetrics: AreaMetricsFile = {
     prefectureLandPrice: { source: "prefecture_land_price", period: null, asOf: "2025-07-01" },
     stationLandTrade: { source: "XPT001", period: SAMPLE_LAND_PERIOD, asOf: null },
     populationProjection: { source: "ipss_projection", period: null, asOf: "2023-01-01" },
+    condoTrade: { source: "XPT001", period: SAMPLE_CONDO_PERIOD, asOf: null },
   },
   sample: true,
   areas: SAMPLE_AREAS,
@@ -762,3 +767,60 @@ export const sampleStations: StationMetrics[] = SEEDS.flatMap((seed) => {
     count: Math.max(2, Math.round((seed.population / 20000) * rand())),
   }));
 });
+
+// マンションの成約事例。市区町村の代表点のまわりに駅を 3 つずつ置き、5 年分の取引を作る。
+// 都心ほど高く、築年数が古いほど・面積が狭いほど坪単価が下がるようにする。
+const PLANS = ["1R", "1K", "1DK", "1LDK", "2LDK", "2LDK", "3LDK", "3LDK", "3LDK", "4LDK"];
+
+export function sampleCondos(prefectureCode: string): CondoFile | undefined {
+  const seeds = SEEDS.filter((s) => s.code.startsWith(prefectureCode));
+  if (seeds.length === 0) return undefined;
+  const stations: CondoFile["stations"] = [];
+  const trades: CondoTrade[] = [];
+  for (const seed of seeds) {
+    const rand = random(`${seed.code}:condo`);
+    for (let i = 0; i < 3; i++) {
+      const station = stations.length;
+      stations.push({
+        name: `${seed.name}サンプル${i + 1}`,
+        lines: ["サンプル線"],
+        cityName: seed.name,
+        coordinates: [
+          round(seed.center[0] + (rand() - 0.5) * 0.06, 5),
+          round(seed.center[1] + (rand() - 0.5) * 0.05, 5),
+        ],
+      });
+      // 坪単価の水準（万円/坪）。戸建の価格の目安に連動させる
+      const level = (seed.price / 3000) * 110 * (0.7 + rand() * 0.6);
+      const count = Math.max(4, Math.round((seed.population / 8000) * (0.4 + rand())));
+      for (let n = 0; n < count; n++) {
+        const period = QUARTERS[Math.floor(rand() * QUARTERS.length)] ?? "2026Q3";
+        const plan = PLANS[Math.floor(rand() * PLANS.length)] ?? "3LDK";
+        const rooms = Number(plan[0]);
+        const area = round(18 + (rooms - 1) * 18 + rand() * 20, 1);
+        const builtYear = 1975 + Math.floor(rand() * 51);
+        const age = Math.max(0, Number(period.slice(0, 4)) - builtYear);
+        const tsubo = level * (1.25 - age * 0.012) * (0.8 + rand() * 0.4);
+        const price = round(Math.max(150, (tsubo * area) / (400 / 121)), -1);
+        trades.push([
+          station,
+          period,
+          price,
+          area,
+          plan,
+          builtYear > Number(period.slice(0, 4)) ? null : builtYear,
+          rand() < 0.55 ? 1 : 0,
+          rand() < 0.3 ? 1 : rand() < 0.5 ? 0 : null,
+          `サンプル町${(n % 4) + 1}丁目`,
+          rooms >= 3 ? "SRC" : "RC",
+          rand() < 0.04 ? "関係者間取引" : "",
+        ]);
+      }
+    }
+  }
+  trades.sort((a, b) => (a[1] === b[1] ? b[2] - a[2] : a[1] < b[1] ? 1 : -1));
+  return { prefectureCode, stations, trades };
+}
+
+// サンプルの成約事例がある都道府県
+export const SAMPLE_CONDO_PREFECTURES = [...new Set(SEEDS.map((s) => s.code.slice(0, 2)))].sort();

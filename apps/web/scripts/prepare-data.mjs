@@ -17,7 +17,14 @@ const TABLES = [
   "land_price_points",
   "station_metrics",
   "station_land_prices",
+  "condo_transactions",
 ];
+// 後から加えたテーブル。版の古い集計ジョブの書き出しには無いため、無くてもビルドを止めない（そのページは空になる）。
+const OPTIONAL_TABLES = ["condo_transactions"];
+// 版の古い集計ジョブの書き出しに無い出典の行。無ければ「時点不明」として補う（画面の検証がすべてのキーを求めるため）。
+const DEFAULT_SOURCES = {
+  condoTrade: { source: "XPT001", period: null, asOf: null },
+};
 
 // BigQuery の JSON 書き出しは INT64 を文字列にするため、数値に戻す。
 const num = (value) => (value === null || value === undefined ? null : Number(value));
@@ -52,8 +59,9 @@ export function fullNames(rows) {
 
 // 指標ごとの出典と時点（data_sources の行）を、packages/shared の DataSources の形にする。
 export function sourcesOf(rows) {
-  return Object.fromEntries(
-    latestRows(rows).map((row) => [
+  return Object.fromEntries([
+    ...Object.entries(DEFAULT_SOURCES),
+    ...latestRows(rows).map((row) => [
       row.metric,
       {
         source: row.source,
@@ -62,7 +70,7 @@ export function sourcesOf(rows) {
         asOf: row.as_of ?? null,
       },
     ]),
-  );
+  ]);
 }
 
 // 土地の取引単価の分布を、市区町村コード → { periodFrom, periodTo, total, districts } にまとめる。
@@ -114,6 +122,59 @@ export function stationLandPricesOf(rows) {
     .sort((a, b) => b.count - a.count);
 }
 
+// マンションの成約事例を、都道府県コード → CondoFile（packages/shared）にまとめる。
+// 同じ位置（最寄り駅の点）の取引を 1 つの駅にまとめ、取引は駅の添字を持つ配列にする（新しい順）。
+// 駅の市区町村名は、その駅を最寄りとする取引の多い市区町村にする。
+export function condosByPrefecture(rows) {
+  const byPrefecture = new Map();
+  for (const row of latestRows(rows)) {
+    const file = byPrefecture.get(row.prefecture_code) ?? {
+      prefectureCode: row.prefecture_code,
+      stations: [],
+      trades: [],
+      index: new Map(),
+    };
+    byPrefecture.set(row.prefecture_code, file);
+    const key = `${row.longitude},${row.latitude}`;
+    let station = file.index.get(key);
+    if (station === undefined) {
+      station = file.stations.length;
+      file.index.set(key, station);
+      file.stations.push({
+        name: row.station_name ?? null,
+        lines: row.line_names ?? [],
+        cities: new Map(),
+        coordinates: [Number(row.longitude), Number(row.latitude)],
+      });
+    }
+    const cities = file.stations[station].cities;
+    if (row.city_name) cities.set(row.city_name, (cities.get(row.city_name) ?? 0) + 1);
+    file.trades.push([
+      station,
+      row.period,
+      Number(row.price),
+      Number(row.area),
+      row.floor_plan ?? "",
+      num(row.building_year),
+      row.kind === "contract" ? 1 : 0,
+      row.renovated === true ? 1 : row.renovated === false ? 0 : null,
+      row.district ?? "",
+      row.structure ?? "",
+      row.remarks ?? "",
+    ]);
+  }
+  for (const file of byPrefecture.values()) {
+    delete file.index;
+    file.stations = file.stations.map(({ cities, ...station }) => ({
+      ...station,
+      cityName: [...cities].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+    }));
+    // 新しい順。同じ時期は価格の高い順
+    file.trades.sort((a, b) => (a[1] === b[1] ? b[2] - a[2] : a[1] < b[1] ? 1 : -1));
+  }
+  return byPrefecture;
+}
+
 // 地価の種類。API の priceClassification（0: 地価公示、1: 都道府県地価調査）。
 const LAND_PRICE_KINDS = { 0: "official", 1: "prefecture" };
 
@@ -144,6 +205,7 @@ export function convert(
     land_price_points,
     station_metrics,
     station_land_prices = [],
+    condo_transactions = [],
   },
   centers = new Map(),
 ) {
@@ -229,6 +291,7 @@ export function convert(
       stationName: row.station_name ?? null,
       stationDistance: num(row.station_distance_m),
     })),
+    condos: [...condosByPrefecture(condo_transactions).values()],
     stations: latestRows(station_metrics).map((row) => ({
       stationName: row.station_name ?? null,
       lineNames: row.line_names ?? [],
@@ -273,7 +336,7 @@ async function main(dir) {
   }
   // 書き出しの途中（EXPORT DATA が古いファイルを消してから書く間）に取ると、一部のテーブルのファイルが無くなる。
   // そのまま作ると画面から項目が消えるため、ビルドを失敗させる。行が 0 のファイルは正常（例: 地価の取り込み前）。
-  const missing = TABLES.filter((name) => !files[name]);
+  const missing = TABLES.filter((name) => !files[name] && !OPTIONAL_TABLES.includes(name));
   if (missing.length > 0) {
     throw new Error(
       `exports are incomplete (no files): ${missing.join(", ")}; retry after the aggregate job finishes`,
@@ -286,14 +349,19 @@ async function main(dir) {
   const out = fileURLToPath(new URL("../src/data/generated/", import.meta.url));
   await rm(out, { recursive: true, force: true });
   await mkdir(join(out, "details"), { recursive: true });
+  await mkdir(join(out, "condos"), { recursive: true });
   await writeFile(join(out, "metrics.json"), JSON.stringify(data.metrics));
   await writeFile(join(out, "land-prices.json"), JSON.stringify(data.landPrices));
   await writeFile(join(out, "stations.json"), JSON.stringify(data.stations));
   for (const detail of data.details) {
     await writeFile(join(out, "details", `${detail.code}.json`), JSON.stringify(detail));
   }
+  for (const condo of data.condos) {
+    await writeFile(join(out, "condos", `${condo.prefectureCode}.json`), JSON.stringify(condo));
+  }
+  const condoTrades = data.condos.reduce((sum, file) => sum + file.trades.length, 0);
   console.log(
-    `prepared ${data.metrics.areas.length} areas, ${data.landPrices.length} land prices, ${data.stations.length} stations`,
+    `prepared ${data.metrics.areas.length} areas, ${data.landPrices.length} land prices, ${data.stations.length} stations, ${condoTrades} condo trades`,
   );
 }
 

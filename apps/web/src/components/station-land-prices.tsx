@@ -5,11 +5,12 @@ import {
 } from "@area-insight/shared";
 import { TrainFront } from "lucide-react";
 import { useState } from "react";
+import { Pager } from "@/components/pager";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { dataset } from "@/data";
 import { formatDate, formatManYenPerTsubo, formatTsuboRange, NO_DATA } from "@/lib/format";
+import { clampPage, pageSlice } from "@/lib/pagination";
 import { formatDataPeriod, formatLandPriceAsOf } from "@/lib/period";
 
 // 駅ごとの土地の坪単価の目安（仕様書「駅ごとの妥当な土地の坪単価」）。
@@ -68,8 +69,9 @@ export function StationLandPriceSection({
 }
 
 function StationTable({ stations }: { stations: StationLandPrice[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? stations : stations.slice(0, SHOWN_STATIONS);
+  const [requested, setPage] = useState(1);
+  const page = clampPage(requested, stations.length, SHOWN_STATIONS);
+  const shown = pageSlice(stations, page, SHOWN_STATIONS);
   return (
     <div className="flex flex-col gap-3">
       <table className="w-full min-w-[640px] text-sm">
@@ -92,18 +94,13 @@ function StationTable({ stations }: { stations: StationLandPrice[] }) {
           ))}
         </tbody>
       </table>
-      {stations.length > SHOWN_STATIONS && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="self-start"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded
-            ? "取引の多い駅だけにする"
-            : `ほか ${stations.length - SHOWN_STATIONS} 駅も表示`}
-        </Button>
-      )}
+      <Pager
+        label="駅の一覧のページ"
+        page={page}
+        total={stations.length}
+        perPage={SHOWN_STATIONS}
+        onChange={setPage}
+      />
       <p className="text-xs text-muted-foreground">
         公示地価は、同じ駅が最寄りの住宅地の地点（公示地価・基準地価）の中央値。括弧内は地点数。
       </p>

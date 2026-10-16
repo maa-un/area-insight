@@ -11,11 +11,16 @@ import { KnownPointTileCatalog } from "./adapters/tiles/known-point-tile-catalog
 import { type Config, loadConfig, requireSecret } from "./config.js";
 import { aggregate } from "./jobs/aggregate.js";
 import { fetchMunicipalities } from "./jobs/municipalities.js";
-import { fetchLandPrices, fetchStations, fetchStationTransactions } from "./jobs/points.js";
+import {
+  fetchCondoTransactions,
+  fetchLandPrices,
+  fetchStations,
+  fetchStationTransactions,
+} from "./jobs/points.js";
 import { fetchProjections } from "./jobs/projections.js";
 import { fetchStatistics } from "./jobs/statistics.js";
 import { fetchTransactions } from "./jobs/transactions.js";
-import { parseQuarter, recentQuarters } from "./quarters.js";
+import { parseQuarter, type Quarter, recentQuarters } from "./quarters.js";
 
 // Cloud Run Jobs から `node dist/main.js <command>` で起動する。
 //   municipalities                     市区町村マスタを取り直す
@@ -26,19 +31,23 @@ import { parseQuarter, recentQuarters } from "./quarters.js";
 //                                      タイルだけを取る。--all-tiles で全国の陸地タイルを取る（初回・数年に 1 回）
 //   station-transactions [--recent N]  直近 N 四半期（既定 8）の駅ごとの取引（土地、土地と建物）を取り直す。
 //                                      駅ごとの取引相場は直近 4 四半期、土地の坪単価は 8 四半期を使う
+//   condo-transactions [--recent N]    直近 N 四半期（既定 20 = 5 年）のマンションの取引（中古マンション等。
+//                                      取引価格と成約価格）を取り直す。成約事例の地図に使う
 //   stations                           駅の位置・駅名・路線名（年に 1 度の更新）を取り直す
 //   statistics                         e-Stat の統計（空き家・家賃・人口）を取り直す
 //   projections                        社人研の将来推計人口（2050 年まで）を取り直す（推計は約 5 年ごと）
 //   aggregate                          指標を作り直し、画面向けのファイルを書き出す
 const USAGE =
   "usage: main.js municipalities | transactions [--recent N | --quarter YYYYQn ...] | " +
-  "land-prices [--year YYYY] [--all-tiles] | station-transactions [--recent N] | stations | " +
+  "land-prices [--year YYYY] [--all-tiles] | station-transactions [--recent N] | condo-transactions [--recent N] | stations | " +
   "statistics | projections | aggregate";
 
 // 既定で取り直す四半期の数。取引価格は直近 4 四半期の指標に使う（それより前は取り込み済みのものを使う）。
 // 駅ごとの取引は全体を置き換えるため、土地の坪単価に使う 8 四半期分を毎回取る。
 const TRANSACTION_QUARTERS = 4;
 const STATION_TRANSACTION_QUARTERS = 8;
+// マンションの成約事例は、仕入れ値の参考に過去 5 年分を見られるようにする。
+const CONDO_TRANSACTION_QUARTERS = 20;
 
 // タイル一覧はイメージの tiles/ に同梱する（dist/main.js から見て ../tiles/）。
 const TILES_DIR = new URL("../tiles/", import.meta.url);
@@ -106,13 +115,14 @@ async function run(
       return { year, rows: await fetchLandPrices(reinfolib(), tiles, store, year, now) };
     }
     case "station-transactions": {
-      // recentQuarters は新しい順。最も古い四半期から最も新しい四半期までを 1 回で取る。
-      const quarters = recentQuarters(now, Number(values.recent ?? STATION_TRANSACTION_QUARTERS));
-      const to = quarters[0];
-      const from = quarters.at(-1);
-      if (!to || !from) throw new Error("--recent must be at least 1");
+      const period = recentPeriod(now, Number(values.recent ?? STATION_TRANSACTION_QUARTERS));
       const tiles = new FileTileCatalog(TILES_DIR);
-      return { rows: await fetchStationTransactions(reinfolib(), tiles, store, { from, to }, now) };
+      return { rows: await fetchStationTransactions(reinfolib(), tiles, store, period, now) };
+    }
+    case "condo-transactions": {
+      const period = recentPeriod(now, Number(values.recent ?? CONDO_TRANSACTION_QUARTERS));
+      const tiles = new FileTileCatalog(TILES_DIR);
+      return { rows: await fetchCondoTransactions(reinfolib(), tiles, store, period, now) };
     }
     case "stations": {
       const tiles = new FileTileCatalog(TILES_DIR);
@@ -140,6 +150,15 @@ async function run(
     default:
       throw new Error(USAGE);
   }
+}
+
+// recentQuarters は新しい順。最も古い四半期から最も新しい四半期までを 1 回で取る。
+function recentPeriod(now: Date, count: number): { from: Quarter; to: Quarter } {
+  const quarters = recentQuarters(now, count);
+  const to = quarters[0];
+  const from = quarters.at(-1);
+  if (!to || !from) throw new Error("--recent must be at least 1");
+  return { from, to };
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
