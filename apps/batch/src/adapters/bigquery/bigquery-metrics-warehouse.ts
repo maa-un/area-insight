@@ -2,7 +2,7 @@ import { BigQuery } from "@google-cloud/bigquery";
 import type { MetricsWarehouse } from "../../ports.js";
 import { BigQueryWriter } from "./bigquery-writer.js";
 import { metricsSql } from "./metrics-sql.js";
-import { RAW_STATIONS } from "./raw-rows.js";
+import { RAW_CONDO_TRANSACTIONS, RAW_STATIONS } from "./raw-rows.js";
 
 // 集計の置き場（MetricsWarehouse）の BigQuery 実装。SQL は metrics-sql.ts にある。
 export class BigQueryMetricsWarehouse implements MetricsWarehouse {
@@ -21,9 +21,10 @@ export class BigQueryMetricsWarehouse implements MetricsWarehouse {
   }
 
   async rebuildMetrics(): Promise<void> {
-    // 駅（stations ジョブ）を一度も取っていなくても集計が止まらないよう、空のテーブルを用意しておく。
-    // その間は駅名が空のまま書き出される
+    // 駅（stations ジョブ）やマンションの取引（condo-transactions ジョブ）を一度も取っていなくても
+    // 集計が止まらないよう、空のテーブルを用意しておく。その間は駅名や成約事例が空のまま書き出される
     await this.writer.ensureTable(RAW_STATIONS);
+    await this.writer.ensureTable(RAW_CONDO_TRANSACTIONS);
     for (const query of this.sql.rebuild) await this.client.query({ query });
   }
 

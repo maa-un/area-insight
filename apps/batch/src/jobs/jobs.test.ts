@@ -16,7 +16,12 @@ import type {
 } from "../ports.js";
 import type { Quarter } from "../quarters.js";
 import { fetchMunicipalities } from "./municipalities.js";
-import { fetchLandPrices, fetchStations, fetchStationTransactions } from "./points.js";
+import {
+  fetchCondoTransactions,
+  fetchLandPrices,
+  fetchStations,
+  fetchStationTransactions,
+} from "./points.js";
 import { fetchProjections } from "./projections.js";
 import { fetchStatistics } from "./statistics.js";
 import { fetchTransactions } from "./transactions.js";
@@ -44,6 +49,13 @@ class FakeSource implements PublicDataSource {
       `station:${tile.z}/${tile.x}/${tile.y}:${from.year}Q${from.quarter}-${to.year}Q${to.quarter}`,
     );
     return [{ coordinates: [139.7, 35.6], properties: { tile: tile.x } }];
+  }
+
+  async condoTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]> {
+    this.calls.push(
+      `condo:${tile.z}/${tile.x}/${tile.y}:${from.year}Q${from.quarter}-${to.year}Q${to.quarter}`,
+    );
+    return tile.x === 1 ? [{ coordinates: [139.7, 35.6], properties: { tile: tile.x } }] : [];
   }
 
   async stations(tile: Tile): Promise<StationRecord[]> {
@@ -100,6 +112,7 @@ class FakeStore implements RawDataStore {
   readonly transactions = new Map<string, unknown[]>();
   readonly landPrices = new Map<number, unknown[]>();
   stations: unknown[] = [];
+  condos: { period: unknown; rows: unknown[] } | null = null;
   stationLines: unknown[] = [];
   statistics: unknown[] = [];
 
@@ -109,6 +122,10 @@ class FakeStore implements RawDataStore {
 
   async replaceStationTransactions(_period: unknown, rows: AsyncIterable<unknown>): Promise<void> {
     this.stations = await collect(rows);
+  }
+
+  async replaceCondoTransactions(period: unknown, rows: AsyncIterable<unknown>): Promise<void> {
+    this.condos = { period, rows: await collect(rows) };
   }
 
   async replaceStations(rows: AsyncIterable<unknown>): Promise<void> {
@@ -225,6 +242,18 @@ describe("fetchStationTransactions", () => {
       fetchStationTransactions(source, new FakeTiles(), store, period, now),
     ).rejects.toThrow("API error");
     expect(store.stations).toEqual(["previous"]);
+  });
+});
+
+describe("fetchCondoTransactions", () => {
+  it("asks every tile once for the whole period and replaces it", async () => {
+    const source = new FakeSource();
+    const store = new FakeStore();
+    const period = { from: { year: 2021, quarter: 3 }, to: { year: 2026, quarter: 2 } } as const;
+
+    expect(await fetchCondoTransactions(source, new FakeTiles(), store, period, now)).toBe(1);
+    expect(source.calls).toEqual(["condo:11/1/1:2021Q3-2026Q2", "condo:11/2/1:2021Q3-2026Q2"]);
+    expect(store.condos).toEqual({ period, rows: [expect.anything()] });
   });
 });
 

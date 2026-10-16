@@ -1,6 +1,7 @@
 import { SiteLayout } from "@/components/site-layout";
 import { AreaPage } from "@/pages/area";
 import { ComparePage } from "@/pages/compare";
+import { CondosPage } from "@/pages/condos";
 import { HomePage } from "@/pages/home";
 import { NotFoundPage, PrivacyPage, TermsPage, UnauthorizedPage } from "@/pages/legal";
 import { MapPage } from "@/pages/map";
@@ -10,7 +11,7 @@ import type { Route } from "@/routes";
 
 export function App({ route }: { route: Route }) {
   return (
-    <SiteLayout page={route.page} wide={route.page === "map"}>
+    <SiteLayout page={route.page} wide={route.page === "map" || route.page === "condos"}>
       <Page route={route} />
     </SiteLayout>
   );
@@ -22,6 +23,8 @@ function Page({ route }: { route: Route }) {
       return <HomePage />;
     case "map":
       return <MapPage />;
+    case "condos":
+      return <CondosPage />;
     case "rankings":
       return <RankingsPage />;
     case "compare":

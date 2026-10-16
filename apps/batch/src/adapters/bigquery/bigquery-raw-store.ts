@@ -12,9 +12,11 @@ import { type Quarter, quarterStartDate } from "../../quarters.js";
 import { EDITION } from "../ipss/ipss-client.js";
 import type { BigQueryWriter } from "./bigquery-writer.js";
 import {
+  condoTransactionRow,
   landPriceRow,
   municipalityRow,
   projectionRow,
+  RAW_CONDO_TRANSACTIONS,
   RAW_LAND_PRICES,
   RAW_MUNICIPALITIES,
   RAW_POPULATION_PROJECTION,
@@ -75,6 +77,17 @@ export class BigQueryRawStore implements RawDataStore {
     await this.writer.replace(
       RAW_STATION_TRANSACTIONS,
       mapRows(rows, (row) => stationTransactionRow(row, period.from, period.to, fetchedAt)),
+    );
+  }
+
+  async replaceCondoTransactions(
+    period: { from: Quarter; to: Quarter },
+    rows: AsyncIterable<PointRecord>,
+    fetchedAt: Date,
+  ): Promise<void> {
+    await this.writer.replace(
+      RAW_CONDO_TRANSACTIONS,
+      mapRows(rows, (row) => condoTransactionRow(row, period.from, period.to, fetchedAt)),
     );
   }
 

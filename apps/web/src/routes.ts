@@ -7,6 +7,7 @@ import { dataset, findArea } from "@/data";
 export type Route =
   | { page: "home" }
   | { page: "map" }
+  | { page: "condos" }
   | { page: "rankings" }
   | { page: "compare" }
   | { page: "area"; detail: AreaDetail }
@@ -60,6 +61,12 @@ export function headOf(route: Route): { title: string; description: string; noin
         title: `地図で探す | ${SITE}`,
         description: "市区町村の取引価格・地価公示の地点・駅ごとの取引相場を地図で見比べられます。",
       };
+    case "condos":
+      return {
+        title: `マンションの成約事例を地図で見る | ${SITE}`,
+        description:
+          "中古マンションの成約価格・取引価格を最寄り駅ごとに地図で見られます。間取り・専有面積・築年数で絞り込み、坪単価の相場を確かめられます。",
+      };
     case "rankings":
       return {
         title: `ランキング | ${SITE}`,
@@ -103,6 +110,7 @@ export function allRoutes(detailOf: (code: string) => AreaDetail | undefined): R
   return [
     { page: "home" },
     { page: "map" },
+    { page: "condos" },
     { page: "rankings" },
     { page: "compare" },
     ...areas,
@@ -121,7 +129,7 @@ export function pageOfPath(pathname: string): { page: PageName; code?: string } 
   if (area) return { page: "area", code: area[1] };
   const name = path.slice(1, -1);
   if (name === "") return { page: "home" };
-  if (["map", "rankings", "compare", "privacy", "terms", "version"].includes(name)) {
+  if (["map", "condos", "rankings", "compare", "privacy", "terms", "version"].includes(name)) {
     return { page: name as PageName };
   }
   return { page: "not-found" };

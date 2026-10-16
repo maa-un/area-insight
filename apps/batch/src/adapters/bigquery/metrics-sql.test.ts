@@ -18,6 +18,7 @@ describe("metricsSql", () => {
       "proj.ds.district_land_prices",
       "proj.ds.station_metrics",
       "proj.ds.station_land_prices",
+      "proj.ds.condo_transactions",
       "proj.ds.data_sources",
     ]);
     expect(sql.rebuild.join("\n")).toContain("`proj.ds.raw_transactions`");
@@ -25,7 +26,7 @@ describe("metricsSql", () => {
 
   it("exports each table with the export id to its own folder", () => {
     const exports = sql.exports("bucket-1", "2026-10-16T00:00:00.000Z");
-    expect(exports).toHaveLength(7);
+    expect(exports).toHaveLength(8);
     expect(exports[0]).toContain("gs://bucket-1/exports/data_sources/*.json");
     expect(exports[0]).toContain("'2026-10-16T00:00:00.000Z' AS export_id");
   });
@@ -45,6 +46,8 @@ describe("metricsSql", () => {
     expect(sources).toContain("'stations', 'XPT001'");
     expect(sources).toContain("'landTrade', 'XIT001', DATE_SUB(quarter, INTERVAL 21 MONTH)");
     expect(sources).toContain("'stationLandTrade', 'XPT001'");
+    expect(sources).toContain("'condoTrade', 'XPT001'");
+    expect(sources).toContain("`proj.ds.raw_condo_transactions`");
     expect(sources).toContain("'officialLandPrice', 'official_land_price'");
     expect(sources).toContain("'prefectureLandPrice', 'prefecture_land_price'");
   });
@@ -154,5 +157,17 @@ describe("metricsSql", () => {
     expect(station).toContain("$.point_in_time_name_ja");
     expect(station).toContain("land_type = '宅地(土地と建物)'");
     expect(station).toContain("INTERVAL 12 MONTH");
+  });
+
+  it("names each condo trade after its nearest station and reads its values", () => {
+    const condos = table("condo_transactions");
+    expect(condos).toContain("`proj.ds.raw_condo_transactions`");
+    expect(condos).toContain("`proj.ds.raw_stations`");
+    expect(condos).toContain("$.u_area_ja");
+    // 「３ＬＤＫ」→「3LDK」
+    expect(condos).toContain("NORMALIZE(JSON_VALUE(");
+    expect(condos).toContain("WHEN '平成' THEN 1988");
+    expect(condos).toContain("r'成約'),\n          'contract', 'transaction') AS kind");
+    expect(condos).toContain("WHERE period_start IS NOT NULL AND price > 0 AND area > 0");
   });
 });

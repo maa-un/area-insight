@@ -23,6 +23,7 @@ import {
   formatCount,
   formatDate,
   formatDistance,
+  formatLines,
   formatManYen,
   formatMetric,
   formatPercent,
@@ -38,7 +39,10 @@ import { areaPath } from "@/routes";
 
 const AREA_METRICS = Object.keys(METRICS).filter((k) => k !== "population") as MetricKey[];
 
-const LAYERS: { id: LayerId; label: string; swatch: string }[] = [
+// 成約事例の点は成約事例のページだけで使う
+type MapLayerId = Exclude<LayerId, "condos">;
+
+const LAYERS: { id: MapLayerId; label: string; swatch: string }[] = [
   { id: "areas", label: "市区町村の塗り分け", swatch: SCALE_COLORS[3] },
   { id: "land", label: "公示地価・基準地価の地点", swatch: SCALE_COLORS[1] },
   { id: "stations", label: "駅ごとの取引相場", swatch: STATION_COLOR },
@@ -51,7 +55,7 @@ export function MapPage() {
   const metricParam = params.get("metric");
   const metric: MetricKey = isMetricKey(metricParam) ? metricParam : "tradePrice";
 
-  const [visible, setVisible] = useState<Record<LayerId, boolean>>({
+  const [visible, setVisible] = useState<Record<MapLayerId, boolean>>({
     areas: true,
     land: true,
     stations: true,
@@ -346,13 +350,6 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
       <p className="text-muted-foreground">{formatDataPeriod(dataset.sources.stations)}</p>
     </div>
   );
-}
-
-// 路線名を並べる。大きな駅は 10 路線を超えるため、先頭の数路線だけを出して残りは数で示す。
-const SHOWN_LINES = 4;
-function formatLines(lines: readonly string[]): string {
-  const shown = lines.slice(0, SHOWN_LINES).join("・");
-  return lines.length > SHOWN_LINES ? `${shown} ほか ${lines.length - SHOWN_LINES} 路線` : shown;
 }
 
 // ㎡単価と坪単価を並べて出す。不動産の広告や査定では坪単価で話すことが多いため。
