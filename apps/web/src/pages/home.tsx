@@ -4,7 +4,7 @@ import { type ComponentType, useId, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { dataset, METRICS, type MetricKey, sortAreas } from "@/data";
+import { dataset, METRICS, type MetricKey, rankableAreas, sortAreas } from "@/data";
 import { formatMetric } from "@/lib/format";
 import { areaPath } from "@/routes";
 
@@ -89,7 +89,7 @@ export function HomePage() {
               </CardHeader>
               <CardContent>
                 <ol className="flex flex-col gap-2 text-sm">
-                  {sortAreas(dataset.areas, key, order)
+                  {sortAreas(rankableAreas(dataset.areas, key, false), key, order)
                     .slice(0, 5)
                     .map((area, i) => (
                       <li key={area.code} className="flex items-center gap-3">

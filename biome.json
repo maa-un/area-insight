@@ -6,7 +6,8 @@
       "!**/dist",
       "!**/dist-ssr",
       "!**/node_modules",
-      "!apps/web/src/data/boundaries.json"
+      "!apps/web/src/data/boundaries.json",
+      "!apps/web/src/data/generated"
     ]
   },
   "formatter": {
