@@ -1,4 +1,6 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { once } from "node:events";
+import { createWriteStream } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BigQuery, type TableField } from "@google-cloud/bigquery";
@@ -45,7 +47,7 @@ export class BigQueryWriter {
     const dir = await mkdtemp(join(tmpdir(), "area-insight-"));
     const file = join(dir, "rows.ndjson");
     try {
-      await writeFile(file, rows.map((row) => JSON.stringify(row)).join("\n"));
+      await writeNdjson(file, rows);
       await this.client
         .dataset(this.datasetId)
         .table(target)
@@ -58,4 +60,20 @@ export class BigQueryWriter {
       await rm(dir, { recursive: true, force: true });
     }
   }
+}
+
+// 1 行ずつ書き出す。全行を 1 つの文字列にまとめると、取引価格（1 四半期で約 4 万行）でヒープが足りなくなる。
+export async function writeNdjson(
+  file: string,
+  rows: Iterable<Record<string, unknown>>,
+): Promise<void> {
+  const out = createWriteStream(file, { encoding: "utf8" });
+  try {
+    for (const row of rows) {
+      if (!out.write(`${JSON.stringify(row)}\n`)) await once(out, "drain");
+    }
+  } finally {
+    out.end();
+  }
+  await once(out, "finish");
 }
