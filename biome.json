@@ -18,5 +18,79 @@
     "parser": {
       "tailwindDirectives": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/api/src/domain/**", "!**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/application/**", "**/adapters/**"],
+                    "message": "domain は内側の層。application・adapters に依存しない"
+                  },
+                  {
+                    "group": ["zod", "jose", "@google-cloud/*", "node:*"],
+                    "message": "domain は外部ライブラリや実行環境に依存しない"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/api/src/application/**", "!**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/adapters/**"],
+                    "message": "application は adapters に依存しない。必要なものはポートとして定義する"
+                  },
+                  {
+                    "group": ["zod", "jose", "@google-cloud/*", "node:*"],
+                    "message": "application は外部ライブラリや実行環境に依存しない"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/batch/src/jobs/**", "apps/batch/src/ports.ts", "!**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/adapters/**"],
+                    "message": "ジョブはポート（ports.ts）にだけ依存し、取得元・保存先の実装を知らない"
+                  },
+                  {
+                    "group": ["@google-cloud/*", "zod"],
+                    "message": "ジョブは保存先や検証のライブラリに直接依存しない"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

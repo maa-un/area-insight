@@ -6,7 +6,16 @@
 
 - `apps/batch`: 公的 API を呼ぶのはバッチだけ。取得したデータは**加工せず** BigQuery に保存する
   （集計は BigQuery 上で行う）。ロードジョブの `WRITE_TRUNCATE` で同じ範囲を置き換え、何度実行しても結果が同じになるようにする
+  - ジョブ（`src/jobs`）は取得元と保存先のポート（`src/ports.ts`）にだけ依存する。実装は `src/adapters`
+    （不動産情報ライブラリ、BigQuery）に置き、`src/main.ts` で組み立てる
 - `apps/api`: 保存 API。Clerk のセッショントークンを検証し、本人のデータだけを読み書きする
+  - クリーンアーキテクチャで層を分ける。依存は外から内への一方向（adapters → application → domain）
+    - `src/domain`: 保存内容の集約（`UserPreferences`）・値オブジェクト・リポジトリのポート。業務の決まりはここに置き、
+      外部ライブラリ・実行環境に依存しない
+    - `src/application`: ユースケース（`PreferencesService`）と、外の仕組みに求めるポート（トークン検証、アカウントの出来事）
+    - `src/adapters`: HTTP、Firestore、Clerk など外の仕組みとの接続。認証サービス固有の形はここで内側の形に変換する
+    - `src/main.ts`: 実装を選んで組み立てる唯一の場所
+  - 依存の向きは Biome の `noRestrictedImports`（`biome.json` の `overrides`）で強制している
 - `apps/web`: 画面。全ページをビルド時に静的生成し、CDN から配る。アクセス時にサーバーも BigQuery も動かさない
   - UI は shadcn/ui（Tailwind CSS v4 + Radix UI、アイコンは lucide）。部品は `pnpm dlx shadcn@<固定版> add <名前>` で
     `src/components/ui` にコピーして使い、UI/UX の質を重視する

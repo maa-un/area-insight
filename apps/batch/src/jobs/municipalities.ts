@@ -1,34 +1,18 @@
 import { PREFECTURE_CODES } from "@area-insight/shared";
-import type { BigQueryWriter, TableSpec } from "../bigquery.js";
-import type { ReinfolibClient } from "../reinfolib.js";
+import type { MunicipalityRecord, PublicDataSource, RawDataStore } from "../ports.js";
 
-export const RAW_MUNICIPALITIES: TableSpec = {
-  name: "raw_municipalities",
-  schema: [
-    { name: "code", type: "STRING", mode: "REQUIRED" },
-    { name: "prefecture_code", type: "STRING", mode: "REQUIRED" },
-    { name: "name", type: "STRING", mode: "REQUIRED" },
-    { name: "fetched_at", type: "TIMESTAMP", mode: "REQUIRED" },
-  ],
-};
-
-// 47 都道府県の市区町村一覧を取り直し、テーブル全体を置き換える。
+// 47 都道府県の市区町村一覧を取り直し、全体を置き換える。
 export async function fetchMunicipalities(
-  client: ReinfolibClient,
-  writer: BigQueryWriter,
+  source: PublicDataSource,
+  store: RawDataStore,
   now: Date,
 ): Promise<number> {
-  const rows: Record<string, unknown>[] = [];
+  const rows: { prefectureCode: string; record: MunicipalityRecord }[] = [];
   for (const prefectureCode of PREFECTURE_CODES) {
-    for (const municipality of await client.municipalities(prefectureCode)) {
-      rows.push({
-        code: municipality.id,
-        prefecture_code: prefectureCode,
-        name: municipality.name,
-        fetched_at: now.toISOString(),
-      });
+    for (const record of await source.municipalities(prefectureCode)) {
+      rows.push({ prefectureCode, record });
     }
   }
-  await writer.replace(RAW_MUNICIPALITIES, rows);
+  await store.replaceMunicipalities(rows, now);
   return rows.length;
 }

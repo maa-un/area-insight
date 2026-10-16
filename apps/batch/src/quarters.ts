@@ -35,3 +35,7 @@ export function parseQuarter(text: string): Quarter {
   if (!match) throw new Error(`quarter must look like 2025Q2: ${text}`);
   return { year: Number(match[1]), quarter: Number(match[2]) as Quarter["quarter"] };
 }
+
+export function formatQuarter({ year, quarter }: Quarter): string {
+  return `${year}Q${quarter}`;
+}
