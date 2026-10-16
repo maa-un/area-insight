@@ -14,15 +14,22 @@ const STATION_MATCH_METERS = 300;
 const RECENT_TRANSACTIONS = 8;
 
 // 「1億2,000万円」「2,000万円」→ 万円。形が違えば NULL。
+// 実データでは「4,700万円」「9.6万円」の形で返る（2026-10 時点で「億」は使われていない）。小数も読む。
 const manYen = (column: string) => `IF(
     REGEXP_CONTAINS(${column}, r'万円|億'),
     IFNULL(SAFE_CAST(REGEXP_EXTRACT(${column}, r'(\\d+)億') AS INT64), 0) * 10000
-      + IFNULL(SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'([\\d,]+)万円'), ',', '') AS INT64), 0),
+      + IFNULL(SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'([\\d,]+(?:\\.\\d+)?)万円'), ',', '') AS FLOAT64), 0),
     NULL)`;
 
 // 「75,200(円/㎡)」→ 75200
 const leadingNumber = (column: string) =>
   `SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'^([\\d,]+)'), ',', '') AS INT64)`;
+
+// v0.2.0 までは JSON 型の列に JSON.stringify した文字列を入れていたため、「JSON の文字列」として
+// 保存された行がある。どちらの形でも中身を読めるよう、文字列なら JSON として読み直す。
+const json = (column: string) =>
+  `IF(JSON_TYPE(${column}) = 'string', SAFE.PARSE_JSON(JSON_VALUE(${column})), ${column})`;
+const prop = (column: string, path: string) => `JSON_VALUE(${json(column)}, '${path}')`;
 
 export type MetricsSql = {
   // 指標のテーブルを作り直す（CREATE OR REPLACE）
@@ -38,7 +45,8 @@ export function metricsSql(dataset: string): MetricsSql {
   const houses = `
     houses AS (
       SELECT
-        municipality_code AS code,
+        -- XIT001 は先頭の 0 を落として返す（例: 函館市 01202 → "1202"）ため、5 桁にそろえる
+        LPAD(municipality_code, 5, '0') AS code,
         period_start,
         district_name,
         SAFE_CAST(trade_price AS INT64) / 10000 AS price,
@@ -47,7 +55,7 @@ export function metricsSql(dataset: string): MetricsSql {
         SAFE_CAST(REGEXP_EXTRACT(building_year, r'^(\\d{4})年') AS INT64) AS building_year
       FROM ${t("raw_transactions")}
       WHERE type = '${HOUSE_TYPE}'
-        AND REGEXP_CONTAINS(municipality_code, r'^\\d{5}$')
+        AND REGEXP_CONTAINS(municipality_code, r'^\\d{4,5}$')
         AND SAFE_CAST(trade_price AS INT64) IS NOT NULL
     ),
     latest AS (SELECT MAX(period_start) AS quarter FROM ${t("raw_transactions")})`;
@@ -73,8 +81,8 @@ export function metricsSql(dataset: string): MetricsSql {
     ),
     vacancy AS (
       SELECT code, SAFE_DIVIDE(
-        MAX(IF(JSON_VALUE(categories, '$.cat01') = '22', value, NULL)),
-        MAX(IF(JSON_VALUE(categories, '$.cat01') = '0', value, NULL))) * 100 AS vacancy_rate
+        MAX(IF(${prop("categories", "$.cat01")} = '22', value, NULL)),
+        MAX(IF(${prop("categories", "$.cat01")} = '0', value, NULL))) * 100 AS vacancy_rate
       FROM ${statistic("housing_vacancy")} GROUP BY code
     ),
     rent AS (SELECT code, MAX(value) AS rent_per_sqm FROM ${statistic("private_rent_per_sqm")} GROUP BY code),
@@ -97,11 +105,11 @@ export function metricsSql(dataset: string): MetricsSql {
     -- 市区町村の代表点。画面はビルド時に境界（国土数値情報 N03）の重心で置き換える（apps/web/scripts/prepare-data.mjs）。
     -- ここでは境界に無い市区町村のための控えとして、地価の地点（無ければ駅）の平均位置を出す
     land_center AS (
-      SELECT JSON_VALUE(properties, '$.city_code') AS code, AVG(longitude) AS lng, AVG(latitude) AS lat
+      SELECT ${prop("properties", "$.city_code")} AS code, AVG(longitude) AS lng, AVG(latitude) AS lat
       FROM ${t("raw_land_prices")} GROUP BY code
     ),
     station_center AS (
-      SELECT JSON_VALUE(properties, '$.city_code') AS code, AVG(longitude) AS lng, AVG(latitude) AS lat
+      SELECT ${prop("properties", "$.city_code")} AS code, AVG(longitude) AS lng, AVG(latitude) AS lat
       FROM ${t("raw_station_transactions")} GROUP BY code
     ),
     joined AS (
@@ -188,16 +196,16 @@ export function metricsSql(dataset: string): MetricsSql {
   const landPricePoints = `
     CREATE OR REPLACE TABLE ${t("land_price_points")} AS
     SELECT
-      JSON_VALUE(properties, '$.point_id') AS point_id,
-      SUBSTR(JSON_VALUE(properties, '$.city_code'), 1, 2) AS prefecture_code,
+      ${prop("properties", "$.point_id")} AS point_id,
+      SUBSTR(${prop("properties", "$.city_code")}, 1, 2) AS prefecture_code,
       longitude, latitude,
-      ${leadingNumber("JSON_VALUE(properties, '$.u_current_years_price_ja')")} AS price,
-      SAFE_CAST(JSON_VALUE(properties, '$.year_on_year_change_rate') AS FLOAT64) AS change_rate,
-      IFNULL(JSON_VALUE(properties, '$.use_category_name_ja'), '') AS use,
-      IFNULL(JSON_VALUE(properties, '$.location'), '') AS location
+      ${leadingNumber(prop("properties", "$.u_current_years_price_ja"))} AS price,
+      SAFE_CAST(${prop("properties", "$.year_on_year_change_rate")} AS FLOAT64) AS change_rate,
+      IFNULL(${prop("properties", "$.use_category_name_ja")}, '') AS use,
+      IFNULL(${prop("properties", "$.location")}, '') AS location
     FROM ${t("raw_land_prices")}
     WHERE target_year_start = (SELECT MAX(target_year_start) FROM ${t("raw_land_prices")})
-      AND ${leadingNumber("JSON_VALUE(properties, '$.u_current_years_price_ja')")} IS NOT NULL`;
+      AND ${leadingNumber(prop("properties", "$.u_current_years_price_ja"))} IS NOT NULL`;
 
   // 駅ごとの取引相場。XPT001 は「土地と建物」の㎡単価が空のため、同じ駅（同じ位置）に集まる取引の
   // 総額の中央値と件数を出す。XPT001 は駅名を返さないため、駅（XKT015）の線のうち最も近いものの駅名を付け、
@@ -207,22 +215,22 @@ export function metricsSql(dataset: string): MetricsSql {
     CREATE OR REPLACE TABLE ${t("station_metrics")} AS
     WITH points AS (
       SELECT
-        ANY_VALUE(SUBSTR(JSON_VALUE(properties, '$.city_code'), 1, 2)) AS prefecture_code,
-        ANY_VALUE(JSON_VALUE(properties, '$.city_name_ja')) AS city_name,
+        ANY_VALUE(SUBSTR(${prop("properties", "$.city_code")}, 1, 2)) AS prefecture_code,
+        ANY_VALUE(${prop("properties", "$.city_name_ja")}) AS city_name,
         longitude, latitude,
-        APPROX_QUANTILES(${manYen("JSON_VALUE(properties, '$.u_transaction_price_total_ja')")}, 100)[SAFE_OFFSET(50)] AS median_price,
+        APPROX_QUANTILES(${manYen(prop("properties", "$.u_transaction_price_total_ja"))}, 100)[SAFE_OFFSET(50)] AS median_price,
         COUNT(*) AS count
       FROM ${t("raw_station_transactions")}
-      WHERE JSON_VALUE(properties, '$.land_type_name_ja') = '${HOUSE_TYPE}'
+      WHERE ${prop("properties", "$.land_type_name_ja")} = '${HOUSE_TYPE}'
       GROUP BY longitude, latitude
       HAVING median_price IS NOT NULL
     ),
     stations AS (
       SELECT
-        JSON_VALUE(properties, '$.S12_001g') AS group_code,
-        JSON_VALUE(properties, '$.S12_001_ja') AS station_name,
-        JSON_VALUE(properties, '$.S12_003_ja') AS line_name,
-        SAFE.ST_GEOGFROMGEOJSON(TO_JSON_STRING(geometry)) AS geography
+        ${prop("properties", "$.S12_001g")} AS group_code,
+        ${prop("properties", "$.S12_001_ja")} AS station_name,
+        ${prop("properties", "$.S12_003_ja")} AS line_name,
+        SAFE.ST_GEOGFROMGEOJSON(TO_JSON_STRING(${json("geometry")})) AS geography
       FROM ${t("raw_stations")}
     ),
     nearest AS (
