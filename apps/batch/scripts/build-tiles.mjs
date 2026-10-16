@@ -6,7 +6,9 @@
 //   - 境界の頂点がタイルの中にある
 //   - タイルの中心か四隅のどれかが境界の内側にある
 // 細い岬や小島の一部を取りこぼすことはあるが、地価の地点や駅はほぼ内陸にあるため実用上問題ない。
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline";
 
 const ZOOMS = [11, 13];
 
@@ -45,8 +47,13 @@ function outerRings(geometry) {
   return [];
 }
 
-const geojson = JSON.parse(await readFile(input, "utf8"));
-const rings = geojson.features.flatMap((feature) => outerRings(feature.geometry));
+// 全国の境界は 500MB を超え、1 つの文字列として読めない。N03 の GeoJSON は 1 行に 1 地物なので、行ごとに読む。
+const rings = [];
+for await (const line of createInterface({ input: createReadStream(input), crlfDelay: Infinity })) {
+  const text = line.trim().replace(/,$/, "");
+  if (!text.startsWith('{ "type": "Feature"') && !text.startsWith('{"type":"Feature"')) continue;
+  rings.push(...outerRings(JSON.parse(text).geometry));
+}
 console.log(`rings: ${rings.length}`);
 
 await mkdir(new URL("../tiles/", import.meta.url), { recursive: true });
@@ -57,10 +64,16 @@ for (const z of ZOOMS) {
     // 頂点を含むタイル
     for (const [lon, lat] of ring) tiles.add(`${lon2x(lon, z)},${lat2y(lat, z)}`);
     // 外接矩形の中で、中心か四隅が内側にあるタイル
-    const lons = ring.map(([lon]) => lon);
-    const lats = ring.map(([, lat]) => lat);
-    const [x0, x1] = [lon2x(Math.min(...lons), z), lon2x(Math.max(...lons), z)];
-    const [y0, y1] = [lat2y(Math.max(...lats), z), lat2y(Math.min(...lats), z)];
+    // 頂点が数十万ある境界もあるため、スプレッド構文（Math.min(...)）を使わずに外接矩形を求める
+    let [west, east, south, north] = [180, -180, 90, -90];
+    for (const [lon, lat] of ring) {
+      if (lon < west) west = lon;
+      if (lon > east) east = lon;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+    }
+    const [x0, x1] = [lon2x(west, z), lon2x(east, z)];
+    const [y0, y1] = [lat2y(north, z), lat2y(south, z)];
     for (let x = x0; x <= x1; x++) {
       for (let y = y0; y <= y1; y++) {
         const key = `${x},${y}`;

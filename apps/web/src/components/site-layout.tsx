@@ -99,12 +99,9 @@ function SiteFooter() {
       <Separator className="mb-6" />
       <div className="flex flex-col gap-1">
         <p>データの基準日: {formatDate(dataset.asOf)}</p>
-        <p>
-          出典: 国土交通省 不動産情報ライブラリ、政府統計の総合窓口（e-Stat）、地理院タイル
-          （表示する文言は利用規約を確認して確定する）
-        </p>
         <p>掲載する指標は目安であり、投資判断を保証するものではありません。</p>
       </div>
+      <Credits />
       <div className="mt-4 flex gap-4">
         <a className="underline-offset-4 hover:underline" href="/terms/">
           利用規約
@@ -114,5 +111,44 @@ function SiteFooter() {
         </a>
       </div>
     </footer>
+  );
+}
+
+// 出典とクレジット。文言は各データの利用規約が指定するものをそのまま使う。
+//   不動産情報ライブラリ: 利用規約「コンテンツの利用に係るPDL1.0に関する重要情報」と API 利用規約 第 7 条
+//   e-Stat: API 機能のクレジット表示（https://www.e-stat.go.jp/api/api-info/credit）
+//   地理院タイル: 国土地理院の地理院タイル利用規約
+const link = "underline underline-offset-2 hover:text-foreground";
+
+function Credits() {
+  return (
+    <div className="mt-4 flex flex-col gap-1">
+      <p>
+        出典：国土交通省 不動産情報ライブラリ（
+        <a className={link} href="https://www.reinfolib.mlit.go.jp/" target="_blank" rel="noopener">
+          https://www.reinfolib.mlit.go.jp/
+        </a>
+        ）、政府統計の総合窓口（e-Stat）、
+        <a
+          className={link}
+          href="https://maps.gsi.go.jp/development/ichiran.html"
+          target="_blank"
+          rel="noopener"
+        >
+          地理院タイル
+        </a>
+        （国土地理院）
+      </p>
+      <p>
+        取引価格の中央値・推移・想定利回りは「不動産取引価格情報」（国土交通省）をもとに合同会社Maa'un
+        Japan が作成しました。
+      </p>
+      <p>
+        このサービスは、国土交通省の不動産情報ライブラリのAPI機能を使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません。
+      </p>
+      <p>
+        このサービスは、政府統計総合窓口(e-Stat)のAPI機能を使用していますが、サービスの内容は国によって保証されたものではありません。
+      </p>
+    </div>
   );
 }
