@@ -31,6 +31,13 @@ describe("prerender", () => {
     expect(render(find("privacy").route)).toContain("プライバシーポリシー");
   });
 
+  it("renders the deployed version without listing it for search", () => {
+    const version = find("version");
+    expect(version.path).toBe("/version/");
+    expect(version.head.noindex).toBe(true);
+    expect(render(version.route)).toContain(`v${__APP_VERSION__}`);
+  });
+
   it("gives every page a distinct title", () => {
     const titles = all.map((p) => p.head.title);
     expect(new Set(titles).size).toBe(titles.length);
@@ -46,6 +53,7 @@ describe("pageOfPath", () => {
   it("maps paths to pages", () => {
     expect(pageOfPath("/")).toEqual({ page: "home" });
     expect(pageOfPath("/map")).toEqual({ page: "map" });
+    expect(pageOfPath("/version")).toEqual({ page: "version" });
     expect(pageOfPath("/areas/13101/")).toEqual({ page: "area", code: "13101" });
     expect(pageOfPath("/nope/")).toEqual({ page: "not-found" });
   });

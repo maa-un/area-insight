@@ -4,3 +4,6 @@ interface ImportMetaEnv {
   // Clerk の公開キー（pk_...）。ブラウザに渡してよい値。未設定ならログイン機能を出さない。
   readonly VITE_CLERK_PUBLISHABLE_KEY?: string;
 }
+
+// デプロイしている版（ルートの package.json の version）。ビルド時に vite.config.ts で埋め込む。
+declare const __APP_VERSION__: string;

@@ -24,6 +24,7 @@ for (const { route, file, path, head } of list) {
   const headTags = [
     `<title>${escapeHtml(head.title)}</title>`,
     head.description && `<meta name="description" content="${escapeHtml(head.description)}" />`,
+    head.noindex && `<meta name="robots" content="noindex" />`,
     path && `<link rel="canonical" href="${origin}${path}" />`,
   ]
     .filter(Boolean)
@@ -39,7 +40,9 @@ for (const { route, file, path, head } of list) {
   await writeFile(`${root}/dist/${file}`, html);
 }
 
-const urls = list.flatMap(({ path }) => (path ? [`  <url><loc>${origin}${path}</loc></url>`] : []));
+const urls = list.flatMap(({ path, head }) =>
+  path && !head.noindex ? [`  <url><loc>${origin}${path}</loc></url>`] : [],
+);
 await writeFile(
   `${root}/dist/sitemap.xml`,
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`,

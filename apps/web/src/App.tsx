@@ -5,6 +5,7 @@ import { HomePage } from "@/pages/home";
 import { NotFoundPage, PrivacyPage, TermsPage, UnauthorizedPage } from "@/pages/legal";
 import { MapPage } from "@/pages/map";
 import { RankingsPage } from "@/pages/rankings";
+import { VersionPage } from "@/pages/version";
 import type { Route } from "@/routes";
 
 export function App({ route }: { route: Route }) {
@@ -31,6 +32,8 @@ function Page({ route }: { route: Route }) {
       return <PrivacyPage />;
     case "terms":
       return <TermsPage />;
+    case "version":
+      return <VersionPage />;
     case "unauthorized":
       return <UnauthorizedPage />;
     case "not-found":
