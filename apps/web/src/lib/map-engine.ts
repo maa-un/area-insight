@@ -13,7 +13,7 @@ import type { FeatureCollection } from "geojson";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 // 市区町村の境界（3.0MB、gzip で 0.7MB）。ハッシュ付きのファイルとして出力し、地図のページでだけ取りに行く。
 import boundariesUrl from "@/data/boundaries.json?url";
-import { NO_DATA_COLOR } from "@/lib/map-scale";
+import { NO_DATA_COLOR, STATION_COLOR } from "@/lib/map-scale";
 
 // MapLibre を扱う部分。地図のある画面でだけ動的に読み込み、他の画面の表示を重くしない。
 // 背景は地理院タイル（淡色地図）。出典表示が利用条件なので attribution に必ず入れる。
@@ -128,7 +128,7 @@ export function createMap(
         source: "areas",
         layout: { "line-join": "round" },
         paint: {
-          "line-color": ["case", isSelected, "#0f172a", "rgba(15, 23, 42, 0.3)"],
+          "line-color": ["case", isSelected, "#26201a", "rgba(38, 32, 26, 0.35)"],
           "line-width": [
             "interpolate",
             ["linear"],
@@ -150,7 +150,7 @@ export function createMap(
         paint: {
           "circle-color": ["get", "color"],
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 3, 14, 8],
-          "circle-stroke-color": "#0f172a",
+          "circle-stroke-color": "#26201a",
           "circle-stroke-width": 1,
         },
       });
@@ -160,9 +160,9 @@ export function createMap(
         source: "stations",
         minzoom: 8,
         paint: {
-          "circle-color": "#f97316",
+          "circle-color": STATION_COLOR,
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 14, 10],
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": "#f3e9d2",
           "circle-stroke-width": 2,
         },
       });

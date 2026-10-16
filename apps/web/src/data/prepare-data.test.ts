@@ -6,7 +6,7 @@ import {
 } from "@area-insight/shared";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error ビルド前に動かす Node のスクリプト（型定義なし）
-import { centersOf, convert, latestRows } from "../../scripts/prepare-data.mjs";
+import { centersOf, convert, fullNames, latestRows } from "../../scripts/prepare-data.mjs";
 
 // BigQuery の JSON 書き出しの形（INT64 は文字列）を模した行。
 const exportRows = {
@@ -119,6 +119,25 @@ const exportRows = {
 };
 
 describe("prepare-data", () => {
+  it("prefixes the wards of designated cities with the city name", () => {
+    const names = fullNames([
+      { code: "14100", prefecture_code: "14", name: "横浜市" },
+      { code: "14113", prefecture_code: "14", name: "緑区" },
+      { code: "14130", prefecture_code: "14", name: "川崎市" },
+      { code: "14150", prefecture_code: "14", name: "相模原市" },
+      { code: "14151", prefecture_code: "14", name: "緑区" },
+      { code: "14201", prefecture_code: "14", name: "横須賀市" },
+      { code: "13102", prefecture_code: "13", name: "中央区" },
+      { code: "01403", prefecture_code: "01", name: "泊村" },
+    ]);
+    expect(names.get("14113")).toBe("横浜市緑区");
+    expect(names.get("14151")).toBe("相模原市緑区");
+    expect(names.get("14100")).toBe("横浜市");
+    expect(names.get("14201")).toBe("横須賀市");
+    expect(names.get("13102")).toBe("中央区");
+    expect(names.get("01403")).toBe("泊村");
+  });
+
   it("keeps only the rows of the latest export", () => {
     expect(latestRows(exportRows.area_metrics).map((r: { name: string }) => r.name)).toEqual([
       "松本市",
