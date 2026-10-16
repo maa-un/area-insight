@@ -98,7 +98,10 @@ function SiteFooter() {
     <footer className="mt-10 bg-ink-deep text-cream-text/75">
       <div className="mx-auto w-full max-w-5xl px-4 py-10 text-xs">
         <div className="flex flex-col gap-1">
-          <p>データの基準日: {formatDate(dataset.asOf)}</p>
+          <p>データの更新日: {formatDate(dataset.updatedAt)}</p>
+          <p>
+            各指標の元データの時点（取引の期間、地価の時点、統計の年）は、数字の近くに示しています。
+          </p>
           <p>掲載する指標は目安であり、投資判断を保証するものではありません。</p>
         </div>
         <Credits />

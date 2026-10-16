@@ -1,4 +1,6 @@
-// 生データから画面向けの指標を作る BigQuery の SQL。仕様書「表示する指標の定義」に沿う。
+import { RELIABLE_TRADE_COUNT } from "@area-insight/shared";
+
+// 生データから画面向けの指標を作る BigQuery の SQL。仕様書「表示する指標の定義」「独自指標と市場の歪み」に沿う。
 // 文字列で保存した値（「2,000万円」「75,200(円/㎡)」など）は、ここで初めて数値にする。
 // 各値の形は 2026-10 に API の実データで確かめた。
 
@@ -29,6 +31,16 @@ const STATION_DISTANCE_BANDS = [
   { band: "within20", maxMinutes: 20 },
 ] as const;
 const BEYOND_BAND = "over20";
+// 地価の種類（API の priceClassification）。地価公示は 1 月 1 日、都道府県地価調査（基準地価）は 7 月 1 日の時点。
+const OFFICIAL = "0";
+const PREFECTURE_SURVEY = "1";
+// 駅ごとの土地の坪単価の幅（25%〜75% 点）。仕様書「駅ごとの妥当な土地の坪単価」
+const FAIR_LOW = 25;
+const FAIR_HIGH = 75;
+// 「利回りは高いが需要が弱い」とみなす都道府県内の位置（上位 2 割）。
+const WEAK_DEMAND_RANK = 0.8;
+// 歪みの順位の差を出すには、比べる市区町村がこれ以上要る（少ないと順位が 0 か 100 に偏る）。
+const MIN_PEERS = 5;
 
 // 「1億2,000万円」「2,000万円」→ 万円。形が違えば NULL。
 // 実データでは「4,700万円」「9.6万円」の形で返る（2026-10 時点で「億」は使われていない）。小数も読む。
@@ -41,6 +53,22 @@ const manYen = (column: string) => `IF(
 // 「75,200(円/㎡)」→ 75200
 const leadingNumber = (column: string) =>
   `SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'^([\\d,]+)'), ',', '') AS INT64)`;
+
+// XPT001 の取引時期「2025年第2四半期」→ その四半期の初日。形が違えば NULL。
+const quarterStart = (column: string) => `SAFE.DATE(
+    SAFE_CAST(REGEXP_EXTRACT(${column}, r'^(\\d{4})年') AS INT64),
+    SAFE_CAST(REGEXP_EXTRACT(${column}, r'第(\\d)四半期') AS INT64) * 3 - 2,
+    1)`;
+
+// 金額「75,000円」「18万円」→ 円。形が違えば NULL（XPT001 の㎡単価の形は実データで確かめる）。
+const yen = (column: string) => `IF(
+    REGEXP_CONTAINS(${column}, r'万円|億'), (${manYen(column)}) * 10000,
+    SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'^([\\d,]+(?:\\.\\d+)?)'), ',', '') AS FLOAT64))`;
+
+// 同じ都道府県の市区町村の中での位置（0〜1）。値の無い市区町村は数えず、比べる相手が少なければ NULL。
+const rankInPrefecture = (column: string) => `IF(
+    ${column} IS NULL OR COUNT(${column}) OVER (PARTITION BY prefecture_code) < ${MIN_PEERS}, NULL,
+    PERCENT_RANK() OVER (PARTITION BY prefecture_code, ${column} IS NULL ORDER BY ${column}))`;
 
 // 「0,住宅地」「4,商業地」→「住宅地」「商業地」。番号の無い「住宅地」はそのまま。
 const categoryName = (column: string) => `REGEXP_EXTRACT(${column}, r'([^,]+)$')`;
@@ -101,9 +129,24 @@ export function metricsSql(dataset: string): MetricsSql {
     `(SELECT area_code AS code, categories, time_code, SAFE_CAST(value AS FLOAT64) AS value
       FROM ${t("raw_statistics")} WHERE table_name = '${name}')`;
 
+  // 土地（宅地(土地)）の取引の㎡単価。土地の指標と分布に使う。
+  const lands = `
+    lands AS (
+      SELECT
+        LPAD(municipality_code, 5, '0') AS code,
+        period_start,
+        IFNULL(district_name, '') AS district,
+        SAFE_CAST(unit_price AS INT64) AS unit_price,
+        SAFE_CAST(area AS FLOAT64) AS land_area
+      FROM ${t("raw_transactions")}
+      WHERE type = '${LAND_TYPE}'
+        AND REGEXP_CONTAINS(municipality_code, r'^\\d{4,5}$')
+        AND SAFE_CAST(unit_price AS INT64) > 0
+    )`;
+
   const areaMetrics = `
     CREATE OR REPLACE TABLE ${t("area_metrics")} AS
-    WITH ${houses},
+    WITH ${houses}, ${lands},
     recent AS (
       SELECT h.* FROM houses AS h, latest
       WHERE h.period_start > DATE_SUB(latest.quarter, INTERVAL ${RECENT_MONTHS} MONTH)
@@ -115,6 +158,31 @@ export function metricsSql(dataset: string): MetricsSql {
         COUNT(*) AS trade_count,
         APPROX_QUANTILES(floor_area, 100)[SAFE_OFFSET(50)] AS floor_area
       FROM recent GROUP BY code
+    ),
+    -- 土地の取引単価（直近 8 四半期）と、直近 4 四半期・その前の 4 四半期の中央値
+    land AS (
+      SELECT
+        code,
+        APPROX_QUANTILES(unit_price, 100)[SAFE_OFFSET(50)] AS land_unit_price,
+        COUNT(*) AS land_trade_count,
+        APPROX_QUANTILES(IF(recent_year, unit_price, NULL), 100)[SAFE_OFFSET(50)] AS land_current,
+        COUNTIF(recent_year) AS land_current_count,
+        APPROX_QUANTILES(IF(recent_year, NULL, unit_price), 100)[SAFE_OFFSET(50)] AS land_previous,
+        COUNTIF(NOT recent_year) AS land_previous_count
+      FROM (
+        SELECT l.*, l.period_start > DATE_SUB(latest.quarter, INTERVAL ${RECENT_MONTHS} MONTH) AS recent_year
+        FROM lands AS l, latest
+        WHERE l.period_start > DATE_SUB(latest.quarter, INTERVAL ${LAND_MONTHS} MONTH)
+      )
+      GROUP BY code
+    ),
+    -- 住宅地の地価（公示地価・基準地価の最新年の地点）の中央値と、地点の前年比の中央値
+    official AS (
+      SELECT
+        code,
+        APPROX_QUANTILES(price, 100)[SAFE_OFFSET(50)] AS official_land_price,
+        APPROX_QUANTILES(change_rate, 100)[SAFE_OFFSET(50)] AS official_change_rate
+      FROM ${t("land_price_points")} WHERE use = '${RESIDENTIAL_USE}' GROUP BY code
     ),
     vacancy AS (
       SELECT code, SAFE_DIVIDE(
@@ -161,22 +229,63 @@ export function metricsSql(dataset: string): MetricsSql {
         ROUND(population_change.change_rate, 1) AS population_change_rate,
         -- 家賃相場 = 民営借家の㎡家賃 × その市区町村で取引された戸建の延床面積（中央値）
         ROUND(rent.rent_per_sqm * trade.floor_area, -3) AS monthly_rent,
+        ROUND(rent.rent_per_sqm) AS rent_per_sqm,
+        ROUND(land.land_unit_price) AS land_unit_price,
+        IFNULL(land.land_trade_count, 0) AS land_trade_count,
+        -- 前年比は、直近 4 四半期とその前の 4 四半期の両方に十分な件数があるときだけ出す
+        IF(land.land_current_count >= ${RELIABLE_TRADE_COUNT} AND land.land_previous_count >= ${RELIABLE_TRADE_COUNT},
+          ROUND(SAFE_DIVIDE(land.land_current - land.land_previous, land.land_previous) * 100, 1), NULL)
+          AS land_price_change_rate,
+        ROUND(official.official_land_price) AS official_land_price,
+        ROUND(official.official_change_rate, 1) AS official_land_price_change_rate,
+        IF(land.land_trade_count >= ${RELIABLE_TRADE_COUNT},
+          ROUND(SAFE_DIVIDE(land.land_unit_price, official.official_land_price), 2), NULL) AS land_to_official_ratio,
         COALESCE(land_center.lng, station_center.lng) AS center_lng,
         COALESCE(land_center.lat, station_center.lat) AS center_lat
       FROM ${t("raw_municipalities")} AS m
       LEFT JOIN trade USING (code)
+      LEFT JOIN land USING (code)
+      LEFT JOIN official USING (code)
       LEFT JOIN vacancy USING (code)
       LEFT JOIN rent USING (code)
       LEFT JOIN population_change USING (code)
       LEFT JOIN land_center USING (code)
       LEFT JOIN station_center USING (code)
+    ),
+    with_yield AS (
+      SELECT
+        joined.*,
+        -- 想定表面利回り = 家賃相場 × 12 ÷ 取引価格。物件ごとではなくエリアの目安
+        ROUND(SAFE_DIVIDE(monthly_rent * 12, trade_price * 10000) * 100, 1) AS gross_yield,
+        -- 件数の少ない取引の値は、順位の比較に使わない（参考値）
+        IF(land_trade_count >= ${RELIABLE_TRADE_COUNT}, land_unit_price, NULL) AS reliable_land_unit_price,
+        IF(trade_count >= ${RELIABLE_TRADE_COUNT},
+          ROUND(SAFE_DIVIDE(monthly_rent * 12, trade_price * 10000) * 100, 1), NULL) AS reliable_gross_yield
+      FROM joined
+    ),
+    -- 市場の歪み（仕様書「市場の歪み指標」）。同じ都道府県の市区町村の中での位置（0〜1）を出し、
+    -- 「需要の指標の位置 − 価格の指標の位置」を -100〜100 で表す
+    ranked AS (
+      SELECT
+        with_yield.*,
+        ${rankInPrefecture("population_change_rate")} AS population_rank,
+        ${rankInPrefecture("rent_per_sqm")} AS rent_rank,
+        ${rankInPrefecture("reliable_land_unit_price")} AS land_rank,
+        ${rankInPrefecture("official_land_price_change_rate")} AS official_change_rank,
+        ${rankInPrefecture("land_price_change_rate")} AS land_change_rank,
+        ${rankInPrefecture("reliable_gross_yield")} AS yield_rank,
+        ${rankInPrefecture("vacancy_rate")} AS vacancy_rank
+      FROM with_yield
     )
     SELECT
-      joined.*,
-      -- 想定表面利回り = 家賃相場 × 12 ÷ 取引価格。物件ごとではなくエリアの目安
-      ROUND(SAFE_DIVIDE(monthly_rent * 12, trade_price * 10000) * 100, 1) AS gross_yield,
-      LAST_DAY(DATE_ADD((SELECT quarter FROM latest), INTERVAL 2 MONTH)) AS as_of
-    FROM joined`;
+      * EXCEPT (reliable_land_unit_price, reliable_gross_yield, population_rank, rent_rank, land_rank,
+        official_change_rank, land_change_rank, yield_rank, vacancy_rank),
+      CAST(ROUND((population_rank - rent_rank) * 100) AS INT64) AS rent_gap,
+      CAST(ROUND((population_rank - land_rank) * 100) AS INT64) AS land_gap,
+      CAST(ROUND((official_change_rank - land_change_rank) * 100) AS INT64) AS momentum_gap,
+      IFNULL(yield_rank >= ${WEAK_DEMAND_RANK} AND population_change_rate < 0
+        AND vacancy_rank >= ${WEAK_DEMAND_RANK}, FALSE) AS weak_demand
+    FROM ranked`;
 
   const areaDetails = `
     CREATE OR REPLACE TABLE ${t("area_details")} AS
@@ -256,11 +365,20 @@ export function metricsSql(dataset: string): MetricsSql {
     LEFT JOIN official USING (code)
     LEFT JOIN by_distance USING (code)`;
 
-  // 地価は最新の年の地点だけを出す（地価公示と地価調査の両方）。area_details がこの表を読むため、先に作る。
+  // 地価は種類（地価公示・地価調査）ごとに最新の年の地点を出す。地価調査は 9 月公表のため、
+  // 今年の地価公示を取り込んだ後も、地価調査は前年のものを使う。area_metrics と area_details がこの表を読むため、先に作る。
   const landPricePoints = `
     CREATE OR REPLACE TABLE ${t("land_price_points")} AS
+    WITH latest AS (
+      SELECT price_classification, MAX(target_year_start) AS target_year_start
+      FROM ${t("raw_land_prices")} GROUP BY price_classification
+    )
     SELECT
       ${prop("properties", "$.point_id")} AS point_id,
+      price_classification AS classification,
+      -- 価格の時点: 地価公示は 1 月 1 日、地価調査は 7 月 1 日
+      IF(price_classification = '${PREFECTURE_SURVEY}', DATE_ADD(target_year_start, INTERVAL 6 MONTH),
+        target_year_start) AS as_of,
       ${prop("properties", "$.city_code")} AS code,
       SUBSTR(${prop("properties", "$.city_code")}, 1, 2) AS prefecture_code,
       longitude, latitude,
@@ -270,28 +388,25 @@ export function metricsSql(dataset: string): MetricsSql {
       IFNULL(${prop("properties", "$.location")}, '') AS location,
       ${prop("properties", "$.nearest_station_name_ja")} AS station_name,
       ${distanceMeters(prop("properties", "$.u_road_distance_to_nearest_station_name_ja"))} AS station_distance_m
-    FROM ${t("raw_land_prices")}
-    WHERE target_year_start = (SELECT MAX(target_year_start) FROM ${t("raw_land_prices")})
-      AND ${leadingNumber(prop("properties", "$.u_current_years_price_ja"))} IS NOT NULL`;
+    FROM ${t("raw_land_prices")} JOIN latest USING (price_classification, target_year_start)
+    WHERE ${leadingNumber(prop("properties", "$.u_current_years_price_ja"))} IS NOT NULL`;
 
-  // 駅ごとの取引相場。XPT001 は「土地と建物」の㎡単価が空のため、同じ駅（同じ位置）に集まる取引の
-  // 総額の中央値と件数を出す。XPT001 は駅名を返さないため、駅（XKT015）の線のうち最も近いものの駅名を付け、
+  // XPT001 の取引。位置は物件の最寄り駅で、取引時期は「2025年第2四半期」の形で返る。
+  const stationTrades = `
+    station_trades AS (
+      SELECT
+        longitude, latitude, properties,
+        ${quarterStart(prop("properties", "$.point_in_time_name_ja"))} AS period_start,
+        ${prop("properties", "$.land_type_name_ja")} AS land_type
+      FROM ${t("raw_station_transactions")}
+    ),
+    station_latest AS (SELECT MAX(period_start) AS quarter FROM station_trades)`;
+
+  // points（longitude, latitude を持つ CTE）の各点に、最も近い駅（XKT015）の線の駅名を付ける。
+  // XPT001 は駅名を返さないため、駅の線のうち最も近いものの駅名を付け、
   // 同じグループコード（同じ名前の駅を運営会社をまたいでまとめたもの）の路線名を並べる。
   // 2026-10 に新宿付近の 1 タイルで確かめたところ、点から最寄りの駅の線までは中央値 6m・最大 117m だった。
-  const stationMetrics = `
-    CREATE OR REPLACE TABLE ${t("station_metrics")} AS
-    WITH points AS (
-      SELECT
-        ANY_VALUE(SUBSTR(${prop("properties", "$.city_code")}, 1, 2)) AS prefecture_code,
-        ANY_VALUE(${prop("properties", "$.city_name_ja")}) AS city_name,
-        longitude, latitude,
-        APPROX_QUANTILES(${manYen(prop("properties", "$.u_transaction_price_total_ja"))}, 100)[SAFE_OFFSET(50)] AS median_price,
-        COUNT(*) AS count
-      FROM ${t("raw_station_transactions")}
-      WHERE ${prop("properties", "$.land_type_name_ja")} = '${HOUSE_TYPE}'
-      GROUP BY longitude, latitude
-      HAVING median_price IS NOT NULL
-    ),
+  const stationNames = `
     stations AS (
       SELECT
         ${prop("properties", "$.S12_001g")} AS group_code,
@@ -313,7 +428,27 @@ export function metricsSql(dataset: string): MetricsSql {
     lines AS (
       SELECT group_code, ARRAY_AGG(DISTINCT line_name IGNORE NULLS ORDER BY line_name) AS line_names
       FROM stations GROUP BY group_code
-    )
+    )`;
+
+  // 駅ごとの取引相場（直近 4 四半期）。XPT001 は「土地と建物」の㎡単価が空のため、同じ駅（同じ位置）に集まる取引の
+  // 総額の中央値と件数を出す。取引時期が読めない取引は期間で絞らずに数える。
+  const stationMetrics = `
+    CREATE OR REPLACE TABLE ${t("station_metrics")} AS
+    WITH ${stationTrades},
+    points AS (
+      SELECT
+        ANY_VALUE(SUBSTR(${prop("properties", "$.city_code")}, 1, 2)) AS prefecture_code,
+        ANY_VALUE(${prop("properties", "$.city_name_ja")}) AS city_name,
+        longitude, latitude,
+        APPROX_QUANTILES(${manYen(prop("properties", "$.u_transaction_price_total_ja"))}, 100)[SAFE_OFFSET(50)] AS median_price,
+        COUNT(*) AS count
+      FROM station_trades, station_latest
+      WHERE land_type = '${HOUSE_TYPE}'
+        AND (period_start IS NULL OR period_start > DATE_SUB(station_latest.quarter, INTERVAL ${RECENT_MONTHS} MONTH))
+      GROUP BY longitude, latitude
+      HAVING median_price IS NOT NULL
+    ),
+    ${stationNames}
     SELECT
       points.*,
       nearest.station.station_name,
@@ -321,6 +456,137 @@ export function metricsSql(dataset: string): MetricsSql {
     FROM points
     LEFT JOIN nearest USING (longitude, latitude)
     LEFT JOIN lines ON lines.group_code = nearest.station.group_code`;
+
+  // 駅ごとの土地の坪単価の目安（仕様書「駅ごとの妥当な土地の坪単価」）。
+  // 1. XPT001 の土地（宅地(土地)）の取引の㎡単価を取る（直近 8 四半期）
+  // 2. 取引のあった市区町村の住宅地の地価の前年比 r で、最新の地価公示の時点へ補正する: 単価 × (1 + r)^(年数)
+  //    年数は四半期の中ほど（初日 + 45 日）から補正先までの日数 ÷ 365.25。前年比が無い市区町村は補正しない
+  // 3. 駅ごとに補正後の 25%・50%・75% 点を出す
+  // 4. 距離別には、同じ駅名（同じ都道府県）が最寄りの住宅地の地価の中央値を並べる（XPT001 は駅からの距離を返さない）
+  const stationLandPrices = `
+    CREATE OR REPLACE TABLE ${t("station_land_prices")} AS
+    WITH ${stationTrades},
+    target AS (
+      SELECT IFNULL(MAX(IF(classification = '${OFFICIAL}', as_of, NULL)), MAX(as_of)) AS adjusted_to
+      FROM ${t("land_price_points")}
+    ),
+    city_change AS (
+      SELECT code, APPROX_QUANTILES(change_rate, 100)[SAFE_OFFSET(50)] AS rate
+      FROM ${t("land_price_points")}
+      WHERE use = '${RESIDENTIAL_USE}' AND change_rate IS NOT NULL
+      GROUP BY code
+    ),
+    land_trades AS (
+      SELECT
+        longitude, latitude, period_start,
+        LPAD(${prop("properties", "$.city_code")}, 5, '0') AS code,
+        COALESCE(
+          ${yen(prop("properties", "$.u_transaction_price_unit_price_square_meter_ja"))},
+          SAFE_DIVIDE(
+            (${manYen(prop("properties", "$.u_transaction_price_total_ja"))}) * 10000,
+            ${leadingNumber(prop("properties", "$.u_area_ja"))})) AS unit_price
+      FROM station_trades, station_latest
+      WHERE land_type = '${LAND_TYPE}'
+        AND period_start > DATE_SUB(station_latest.quarter, INTERVAL ${LAND_MONTHS} MONTH)
+    ),
+    adjusted AS (
+      SELECT
+        l.longitude, l.latitude, l.code, l.period_start,
+        IF(target.adjusted_to IS NULL OR c.rate IS NULL, l.unit_price,
+          l.unit_price * POW(1 + c.rate / 100,
+            DATE_DIFF(target.adjusted_to, DATE_ADD(l.period_start, INTERVAL 45 DAY), DAY) / 365.25)) AS unit_price
+      FROM land_trades AS l
+      LEFT JOIN city_change AS c USING (code)
+      CROSS JOIN target
+      WHERE l.unit_price > 0
+    ),
+    points AS (
+      SELECT
+        longitude, latitude,
+        ANY_VALUE(SUBSTR(code, 1, 2)) AS prefecture_code,
+        ARRAY_AGG(DISTINCT code ORDER BY code) AS city_codes,
+        COUNT(*) AS count,
+        APPROX_QUANTILES(unit_price, 100) AS quantiles,
+        MIN(period_start) AS from_date,
+        MAX(period_start) AS to_date
+      FROM adjusted GROUP BY longitude, latitude
+    ),
+    ${stationNames},
+    -- 同じ駅が最寄りの住宅地の地価（距離別）。駅名は地価の地点の「最寄り駅」と駅（XKT015）の駅名で突き合わせる
+    official_bands AS (
+      SELECT prefecture_code, station_name,
+        ARRAY_AGG(STRUCT(band, price, count) ORDER BY ${stationDistanceBandOrder("band")}) AS bands
+      FROM (
+        SELECT prefecture_code, station_name, band,
+          ROUND(APPROX_QUANTILES(price, 100)[SAFE_OFFSET(50)]) AS price, COUNT(*) AS count
+        FROM (
+          SELECT prefecture_code, station_name, price, ${stationDistanceBand("station_distance_m")} AS band
+          FROM ${t("land_price_points")}
+          WHERE use = '${RESIDENTIAL_USE}' AND station_name IS NOT NULL AND station_distance_m IS NOT NULL
+        ) GROUP BY prefecture_code, station_name, band
+      ) GROUP BY prefecture_code, station_name
+    )
+    SELECT
+      nearest.station.station_name,
+      IFNULL(lines.line_names, []) AS line_names,
+      points.longitude, points.latitude, points.prefecture_code, points.city_codes, points.count,
+      ROUND(points.quantiles[SAFE_OFFSET(${FAIR_LOW})]) AS low,
+      ROUND(points.quantiles[SAFE_OFFSET(50)]) AS median,
+      ROUND(points.quantiles[SAFE_OFFSET(${FAIR_HIGH})]) AS high,
+      FORMAT('%dQ%d', EXTRACT(YEAR FROM points.from_date), EXTRACT(QUARTER FROM points.from_date)) AS period_from,
+      FORMAT('%dQ%d', EXTRACT(YEAR FROM points.to_date), EXTRACT(QUARTER FROM points.to_date)) AS period_to,
+      target.adjusted_to,
+      IFNULL(official_bands.bands, []) AS official_by_station_distance
+    FROM points
+    JOIN nearest USING (longitude, latitude)
+    LEFT JOIN lines ON lines.group_code = nearest.station.group_code
+    LEFT JOIN official_bands
+      ON official_bands.prefecture_code = points.prefecture_code
+      AND official_bands.station_name = nearest.station.station_name
+    CROSS JOIN target`;
+
+  // 指標ごとの元データの時点（仕様書「指標と基準時点」）。画面は数字の近くにこの時点を出す。
+  // 取引は四半期の範囲（初日〜最後の四半期の末日）、地価は価格の時点、統計は年。
+  const quarterRange = (key: string, source: string, months: number, latest: string) => `
+      SELECT '${key}' AS key, '${source}' AS source,
+        DATE_ADD(DATE_SUB(${latest}, INTERVAL ${months} MONTH), INTERVAL 3 MONTH) AS from_date,
+        LAST_DAY(DATE_ADD(${latest}, INTERVAL 2 MONTH)) AS to_date, 'quarter' AS precision`;
+  const statisticYear = (key: string, source: string, table: string) => `
+      SELECT '${key}', '${source}', CAST(NULL AS DATE),
+        SAFE.DATE(SAFE_CAST(SUBSTR(MAX(time_code), 1, 4) AS INT64), 1, 1), 'year'
+      FROM ${t("raw_statistics")} WHERE table_name = '${table}'`;
+  const dataPeriods = `
+    CREATE OR REPLACE TABLE ${t("data_periods")} AS
+    WITH latest AS (SELECT MAX(period_start) AS quarter FROM ${t("raw_transactions")}),
+    ${stationTrades},
+    station_land AS (
+      SELECT MIN(period_start) AS from_date, MAX(period_start) AS to_date FROM station_trades, station_latest
+      WHERE land_type = '${LAND_TYPE}' AND period_start > DATE_SUB(station_latest.quarter, INTERVAL ${LAND_MONTHS} MONTH)
+    )
+    SELECT * FROM (
+      ${quarterRange("trade", "不動産情報ライブラリ（取引価格）", RECENT_MONTHS, "(SELECT quarter FROM latest)")}
+      UNION ALL
+      ${quarterRange("landTrade", "不動産情報ライブラリ（取引価格）", LAND_MONTHS, "(SELECT quarter FROM latest)")}
+      UNION ALL
+      ${quarterRange("stationTrade", "不動産情報ライブラリ（取引価格）", RECENT_MONTHS, "(SELECT quarter FROM station_latest)")}
+      UNION ALL
+      SELECT 'stationLandTrade', '不動産情報ライブラリ（取引価格）', from_date,
+        LAST_DAY(DATE_ADD(to_date, INTERVAL 2 MONTH)), 'quarter'
+      FROM station_land
+      UNION ALL
+      SELECT 'officialLandPrice', '地価公示', CAST(NULL AS DATE), MAX(as_of), 'day'
+      FROM ${t("land_price_points")} WHERE classification = '${OFFICIAL}'
+      UNION ALL
+      SELECT 'prefectureLandPrice', '都道府県地価調査', CAST(NULL AS DATE), MAX(as_of), 'day'
+      FROM ${t("land_price_points")} WHERE classification = '${PREFECTURE_SURVEY}'
+      UNION ALL
+      ${statisticYear("vacancy", "住宅・土地統計調査", "housing_vacancy")}
+      UNION ALL
+      ${statisticYear("rent", "住宅・土地統計調査", "private_rent_per_sqm")}
+      UNION ALL
+      ${statisticYear("population", "住民基本台帳人口", "resident_population")}
+    )
+    WHERE to_date IS NOT NULL`;
 
   // 土地の取引単価の分布。地区ごとと市区町村全体（district が NULL）。
   // 分位は 0〜100% を 5% 刻みの 21 値で持ち、画面で「この単価は地区の下位何%か」を出す。
@@ -363,7 +629,15 @@ export function metricsSql(dataset: string): MetricsSql {
     FROM stats, period`;
 
   return {
-    rebuild: [areaMetrics, landPricePoints, areaDetails, districtLandPrices, stationMetrics],
+    rebuild: [
+      landPricePoints,
+      areaMetrics,
+      areaDetails,
+      districtLandPrices,
+      stationMetrics,
+      stationLandPrices,
+      dataPeriods,
+    ],
     exports: (bucket, exportId) =>
       [
         "area_metrics",
@@ -371,6 +645,8 @@ export function metricsSql(dataset: string): MetricsSql {
         "district_land_prices",
         "land_price_points",
         "station_metrics",
+        "station_land_prices",
+        "data_periods",
       ].map(
         (name) => `
           EXPORT DATA OPTIONS (

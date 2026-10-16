@@ -15,6 +15,8 @@ const TABLES = [
   "district_land_prices",
   "land_price_points",
   "station_metrics",
+  "station_land_prices",
+  "data_periods",
 ];
 
 // BigQuery の JSON 書き出しは INT64 を文字列にするため、数値に戻す。
@@ -72,6 +74,49 @@ export function landPricesByCode(rows) {
   return byCode;
 }
 
+// 指標ごとの元データの時点（data_periods の行）を、キー → { source, from, to, precision } にまとめる。
+export function periodsOf(rows) {
+  return Object.fromEntries(
+    latestRows(rows).map((row) => [
+      row.key,
+      {
+        source: row.source,
+        from: row.from_date ?? null,
+        to: row.to_date,
+        precision: row.precision,
+      },
+    ]),
+  );
+}
+
+// 駅ごとの土地の坪単価の目安。市区町村ページでは、その市区町村の土地が取引された駅だけを出す。
+export function stationLandPricesOf(rows) {
+  return latestRows(rows)
+    .filter((row) => row.station_name)
+    .map((row) => ({
+      stationName: row.station_name,
+      lineNames: row.line_names ?? [],
+      coordinates: [Number(row.longitude), Number(row.latitude)],
+      cityCodes: row.city_codes ?? [],
+      count: num(row.count),
+      low: num(row.low),
+      median: num(row.median),
+      high: num(row.high),
+      periodFrom: row.period_from,
+      periodTo: row.period_to,
+      adjustedTo: row.adjusted_to ?? null,
+      officialByStationDistance: (row.official_by_station_distance ?? []).map((b) => ({
+        band: b.band,
+        price: num(b.price),
+        count: num(b.count),
+      })),
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// 地価の種類。API の priceClassification（0: 地価公示、1: 都道府県地価調査）。
+const LAND_PRICE_KINDS = { 0: "official", 1: "prefecture" };
+
 const NO_LAND_PRICES = { periodFrom: null, periodTo: null, total: null, districts: [] };
 
 // 住宅地の地価（市区町村の中央値と、駅からの距離別）。地点が無ければ null と空の配列。
@@ -91,16 +136,27 @@ export function officialLandPricesOf(row) {
 }
 
 export function convert(
-  { area_metrics, area_details, district_land_prices = [], land_price_points, station_metrics },
+  {
+    area_metrics,
+    area_details,
+    district_land_prices = [],
+    land_price_points,
+    station_metrics,
+    station_land_prices = [],
+    data_periods = [],
+  },
   centers = new Map(),
 ) {
   const metrics = latestRows(area_metrics);
   const names = fullNames(metrics);
   const landPrices = landPricesByCode(district_land_prices);
-  const asOf = metrics.map((row) => row.as_of).find(Boolean);
+  const stationLandPrices = stationLandPricesOf(station_land_prices);
+  // 書き出しの印は集計ジョブの実行時刻（ISO 8601）。その日付を更新日にする
+  const updatedAt = String(metrics[0]?.export_id ?? "").slice(0, 10);
   return {
     metrics: {
-      asOf,
+      updatedAt,
+      periods: periodsOf(data_periods),
       sample: false,
       areas: metrics.map((row) => ({
         code: row.code,
@@ -113,6 +169,17 @@ export function convert(
         populationChangeRate: num(row.population_change_rate),
         grossYield: num(row.gross_yield),
         monthlyRent: num(row.monthly_rent),
+        rentPerSqm: num(row.rent_per_sqm),
+        landUnitPrice: num(row.land_unit_price),
+        landTradeCount: num(row.land_trade_count) ?? 0,
+        landPriceChangeRate: num(row.land_price_change_rate),
+        officialLandPrice: num(row.official_land_price),
+        officialLandPriceChangeRate: num(row.official_land_price_change_rate),
+        landToOfficialRatio: num(row.land_to_official_ratio),
+        rentGap: num(row.rent_gap),
+        landGap: num(row.land_gap),
+        momentumGap: num(row.momentum_gap),
+        weakDemand: row.weak_demand === true,
         center: centers.get(row.code) ?? lngLat(row.center_lng ?? null, row.center_lat ?? null),
       })),
     },
@@ -120,6 +187,7 @@ export function convert(
       code: row.code,
       landPrices: landPrices.get(row.code) ?? NO_LAND_PRICES,
       officialLandPrices: officialLandPricesOf(row),
+      stationLandPrices: stationLandPrices.filter((s) => s.cityCodes.includes(row.code)),
       quarters: (row.quarters ?? []).map((q) => ({
         period: q.period,
         price: num(q.price),
@@ -145,6 +213,8 @@ export function convert(
     })),
     landPrices: latestRows(land_price_points).map((row) => ({
       pointId: String(row.point_id),
+      kind: LAND_PRICE_KINDS[row.classification] ?? "official",
+      asOf: row.as_of,
       coordinates: [Number(row.longitude), Number(row.latitude)],
       price: num(row.price),
       changeRate: num(row.change_rate),

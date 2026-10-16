@@ -13,6 +13,7 @@ import {
 } from "@/data";
 import {
   formatCount,
+  formatDate,
   formatDistance,
   formatManYen,
   formatMetric,
@@ -30,7 +31,7 @@ const AREA_METRICS = Object.keys(METRICS).filter((k) => k !== "population") as M
 
 const LAYERS: { id: LayerId; label: string; swatch: string }[] = [
   { id: "areas", label: "市区町村の塗り分け", swatch: SCALE_COLORS[3] },
-  { id: "land", label: "地価公示・地価調査の地点", swatch: SCALE_COLORS[1] },
+  { id: "land", label: "公示地価・基準地価の地点", swatch: SCALE_COLORS[1] },
   { id: "stations", label: "駅ごとの取引相場", swatch: STATION_COLOR },
 ];
 
@@ -272,7 +273,10 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
   if (selection.layer === "land") {
     return (
       <div className={box}>
-        <p className="text-xs text-muted-foreground">地価（{String(p.use)}）</p>
+        <p className="text-xs text-muted-foreground">
+          {p.kind === "prefecture" ? "基準地価" : "公示地価"}（{String(p.use)}）・
+          {formatDate(String(p.asOf))}時点
+        </p>
         <p className="font-semibold">{String(p.location)}</p>
         <UnitPrice perSqm={Number(p.price)} />
         <p className="text-muted-foreground tabular-nums">

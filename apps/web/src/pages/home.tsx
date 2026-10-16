@@ -2,6 +2,7 @@ import { type AreaMetrics, prefectureName } from "@area-insight/shared";
 import { ChevronRight, Columns3, ListOrdered, Map as MapIcon, Search } from "lucide-react";
 import { type ComponentType, useId, useState } from "react";
 import { Bar, Eyebrow } from "@/components/brand";
+import { DataPeriodNote } from "@/components/data-period";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { dataset, METRICS, type MetricKey, rankableAreas, sortAreas } from "@/data";
@@ -39,6 +40,7 @@ const highlights: { key: MetricKey; order: "asc" | "desc"; title: string }[] = [
   { key: "grossYield", order: "desc", title: "想定利回りが高い" },
   { key: "tradePrice", order: "asc", title: "取引価格が手ごろ" },
   { key: "populationChangeRate", order: "desc", title: "人口が増えている" },
+  { key: "rentGap", order: "desc", title: "人口の割に家賃が低い" },
 ];
 
 export function HomePage() {
@@ -86,12 +88,13 @@ export function HomePage() {
             すべて見る
           </a>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {highlights.map(({ key, order, title }) => (
             <Card key={key}>
               <CardHeader>
                 <CardTitle className="text-base">{title}</CardTitle>
                 <CardDescription>{METRICS[key].label}</CardDescription>
+                <DataPeriodNote sources={METRICS[key].sources} />
               </CardHeader>
               <CardContent>
                 <TopList

@@ -2,10 +2,14 @@ import type {
   AreaDetail,
   AreaMetrics,
   AreaMetricsFile,
+  DataPeriod,
+  DataPeriodKey,
   LandPricePoint,
   LngLat,
+  StationLandPrice,
   StationMetrics,
 } from "@area-insight/shared";
+import { RELIABLE_TRADE_COUNT } from "@area-insight/shared";
 
 // API キー（不動産情報ライブラリ）とアプリケーション ID（e-Stat）が届くまで画面を作り込むための
 // サンプルデータ。市区町村コード・名称・位置は実在のものだが、指標の値はすべて作り物。
@@ -438,7 +442,52 @@ const SEEDS: Seed[] = [
   },
 ];
 
-export const SAMPLE_AS_OF = "2026-09-30";
+export const SAMPLE_UPDATED_AT = "2026-10-01";
+// 公示地価の時点。駅の土地の坪単価はこの時点に補正した値として置く
+const SAMPLE_OFFICIAL_AS_OF = "2026-01-01";
+
+// 指標ごとの元データの時点（実データでは集計ジョブの data_periods）。
+const SAMPLE_PERIODS: Partial<Record<DataPeriodKey, DataPeriod>> = {
+  trade: {
+    source: "不動産情報ライブラリ（取引価格）",
+    from: "2025-10-01",
+    to: "2026-09-30",
+    precision: "quarter",
+  },
+  landTrade: {
+    source: "不動産情報ライブラリ（取引価格）",
+    from: "2024-10-01",
+    to: "2026-09-30",
+    precision: "quarter",
+  },
+  stationTrade: {
+    source: "不動産情報ライブラリ（取引価格）",
+    from: "2025-10-01",
+    to: "2026-09-30",
+    precision: "quarter",
+  },
+  stationLandTrade: {
+    source: "不動産情報ライブラリ（取引価格）",
+    from: "2024-10-01",
+    to: "2026-09-30",
+    precision: "quarter",
+  },
+  officialLandPrice: {
+    source: "地価公示",
+    from: null,
+    to: SAMPLE_OFFICIAL_AS_OF,
+    precision: "day",
+  },
+  prefectureLandPrice: {
+    source: "都道府県地価調査",
+    from: null,
+    to: "2025-07-01",
+    precision: "day",
+  },
+  vacancy: { source: "住宅・土地統計調査", from: null, to: "2023-01-01", precision: "year" },
+  rent: { source: "住宅・土地統計調査", from: null, to: "2023-01-01", precision: "year" },
+  population: { source: "住民基本台帳人口", from: null, to: "2025-01-01", precision: "year" },
+};
 
 // level を中心に ±spread の幅で広がる 21 個の分位（0%〜100%、5% 刻み）。100 円単位に丸める。
 function quantilesAround(level: number, spread: number): number[] {
@@ -464,11 +513,22 @@ const round = (value: number, digits = 0) => {
   return Math.round(value * base) / base;
 };
 
-function metricsFor(seed: Seed): AreaMetrics {
+// 歪みの元になる値。ranked() で都道府県内の順位の差に直す。
+type Unranked = Omit<AreaMetrics, "rentGap" | "landGap" | "momentumGap" | "weakDemand">;
+
+function metricsFor(seed: Seed): Unranked {
   const rand = random(seed.code);
   // 人口の少ない町ほど取引が少ない。閾値未満（参考値）の例も混ぜる。
   const tradeCount = Math.max(3, Math.round((seed.population / 2500) * (0.6 + rand() * 0.8)));
-  const monthlyRent = Math.round((45000 + seed.price * 9 + rand() * 15000) / 1000) * 1000;
+  const floorArea = 95 + rand() * 25;
+  // 家賃は価格にある程度連動させつつ、ばらつきで「人口の割に家賃が低い」市区町村も出す
+  const rentPerSqm = Math.round(700 + seed.price * 0.25 + (rand() - 0.5) * 500);
+  const monthlyRent = Math.round((rentPerSqm * floorArea) / 1000) * 1000;
+  const landUnitPrice = Math.round(((seed.price * 10000) / 180) * 0.6 * (0.8 + rand() * 0.4));
+  const landTradeCount = Math.max(2, Math.round(tradeCount * (0.8 + rand() * 0.8)));
+  const officialLandPrice = Math.round((landUnitPrice * (0.95 + rand() * 0.3)) / 100) * 100;
+  const officialLandPriceChangeRate = round(seed.trend / 2 + (rand() - 0.3) * 2, 1);
+  const reliableLand = landTradeCount >= RELIABLE_TRADE_COUNT;
   return {
     code: seed.code,
     prefectureCode: seed.code.slice(0, 2),
@@ -480,14 +540,70 @@ function metricsFor(seed: Seed): AreaMetrics {
     populationChangeRate: seed.trend,
     grossYield: round(((monthlyRent * 12) / (seed.price * 10000)) * 100, 1),
     monthlyRent,
+    rentPerSqm,
+    landUnitPrice,
+    landTradeCount,
+    landPriceChangeRate: reliableLand
+      ? round(officialLandPriceChangeRate + (rand() - 0.5) * 6, 1)
+      : null,
+    officialLandPrice,
+    officialLandPriceChangeRate,
+    landToOfficialRatio: reliableLand ? round(landUnitPrice / officialLandPrice, 2) : null,
     center: seed.center,
   };
 }
 
+// 都道府県内の位置（0〜1）。集計ジョブの PERCENT_RANK と同じく、値の無い市区町村は数えず、相手が 5 未満なら null。
+function rankIn(values: (number | null)[], value: number | null): number | null {
+  const peers = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
+  if (value === null || peers.length < 5) return null;
+  return peers.indexOf(value) / (peers.length - 1);
+}
+
+const gap = (demand: number | null, price: number | null) =>
+  demand === null || price === null ? null : Math.round((demand - price) * 100);
+
+// 市場の歪み（仕様書「市場の歪み指標」）。集計ジョブの area_metrics と同じ決め方。
+function ranked(areas: Unranked[]): AreaMetrics[] {
+  return areas.map((area) => {
+    const peers = areas.filter((a) => a.prefectureCode === area.prefectureCode);
+    const reliable = (a: Unranked) => a.tradeCount >= RELIABLE_TRADE_COUNT;
+    const rank = (pick: (a: Unranked) => number | null) => rankIn(peers.map(pick), pick(area));
+    const landPrice = (a: Unranked) =>
+      a.landTradeCount >= RELIABLE_TRADE_COUNT ? a.landUnitPrice : null;
+    const yieldRank = rank((a) => (reliable(a) ? a.grossYield : null));
+    const vacancyRank = rank((a) => a.vacancyRate);
+    return {
+      ...area,
+      rentGap: gap(
+        rank((a) => a.populationChangeRate),
+        rank((a) => a.rentPerSqm),
+      ),
+      landGap: gap(
+        rank((a) => a.populationChangeRate),
+        rank(landPrice),
+      ),
+      momentumGap: gap(
+        rank((a) => a.officialLandPriceChangeRate),
+        rank((a) => a.landPriceChangeRate),
+      ),
+      weakDemand:
+        yieldRank !== null &&
+        vacancyRank !== null &&
+        yieldRank >= 0.8 &&
+        vacancyRank >= 0.8 &&
+        (area.populationChangeRate ?? 0) < 0,
+    };
+  });
+}
+
+const SAMPLE_AREAS = ranked(SEEDS.map(metricsFor));
+
 export const sampleMetrics: AreaMetricsFile = {
-  asOf: SAMPLE_AS_OF,
+  updatedAt: SAMPLE_UPDATED_AT,
+  periods: SAMPLE_PERIODS,
   sample: true,
-  areas: SEEDS.map(metricsFor),
+  areas: SAMPLE_AREAS,
 };
 
 const QUARTERS = Array.from({ length: 20 }, (_, i) => {
@@ -539,7 +655,7 @@ export function sampleDetail(code: string): AreaDetail | undefined {
   });
 
   // 土地（宅地(土地)）の取引単価（円/㎡）。戸建の相場から土地分をおおまかに置き、地区ごとに差を付ける。
-  const baseUnit = ((seed.price * 10000) / 180) * 0.6;
+  const baseUnit = metrics.landUnitPrice ?? ((seed.price * 10000) / 180) * 0.6;
   const districts = Array.from({ length: 5 }, (_, i) => {
     const level = baseUnit * (0.5 + rand() * 1.2);
     return {
@@ -553,7 +669,7 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     periodFrom: QUARTERS[QUARTERS.length - 8] ?? null,
     periodTo: QUARTERS[QUARTERS.length - 1] ?? null,
     total: {
-      count: districts.reduce((sum, d) => sum + d.count, 0),
+      count: metrics.landTradeCount,
       quantiles: quantilesAround(baseUnit, 0.7),
       medianArea: round(200 + rand() * 60),
     },
@@ -561,7 +677,7 @@ export function sampleDetail(code: string): AreaDetail | undefined {
   };
 
   // 住宅地の地価（公示地価・地価調査）。取引単価よりやや高めに置き、駅に近いほど高くする。
-  const officialPrice = round(baseUnit * (0.95 + rand() * 0.3), -2);
+  const officialPrice = metrics.officialLandPrice ?? round(baseUnit * (0.95 + rand() * 0.3), -2);
   const officialLandPrices = {
     residential: { price: officialPrice, count: 6 + Math.floor(rand() * 20) },
     byStationDistance: [
@@ -583,6 +699,31 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     ],
   };
 
+  // 駅ごとの土地の坪単価の目安。市区町村の土地の単価のまわりに 2 駅置く。
+  const stationLandPrices: StationLandPrice[] = Array.from({ length: 2 }, (_, i) => {
+    const median = round(metrics.landUnitPrice ?? baseUnit) * (i === 0 ? 1.25 : 0.85);
+    return {
+      stationName: `${seed.name}サンプル${i + 1}`,
+      lineNames: ["サンプル線"],
+      coordinates: [
+        round(seed.center[0] + (rand() - 0.5) * 0.05, 5),
+        round(seed.center[1] + (rand() - 0.5) * 0.04, 5),
+      ] satisfies LngLat,
+      cityCodes: [code],
+      count: Math.max(3, Math.round(metrics.landTradeCount * (i === 0 ? 0.5 : 0.25))),
+      low: round(median * 0.82, -2),
+      median: round(median, -2),
+      high: round(median * 1.2, -2),
+      periodFrom: QUARTERS[QUARTERS.length - 8] ?? "2024Q4",
+      periodTo: QUARTERS[QUARTERS.length - 1] ?? "2026Q3",
+      adjustedTo: SAMPLE_OFFICIAL_AS_OF,
+      officialByStationDistance: officialLandPrices.byStationDistance.map((b) => ({
+        ...b,
+        price: round(b.price * (i === 0 ? 1.15 : 0.9), -2),
+      })),
+    };
+  }).sort((a, b) => b.count - a.count);
+
   return {
     code,
     quarters,
@@ -590,6 +731,7 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     populationHistory,
     landPrices,
     officialLandPrices,
+    stationLandPrices,
     recentTransactions,
   };
 }
@@ -600,8 +742,11 @@ export const sampleLandPrices: LandPricePoint[] = SEEDS.flatMap((seed) => {
   return Array.from({ length: 4 }, (_, i) => {
     const commercial = i === 0;
     const price = round((seed.price / 3000) * 90000 * (commercial ? 2.5 : 0.6 + rand()), -2);
+    // 1 地点目（商業地）は地価調査、それ以外は地価公示の地点として置く
     return {
       pointId: `${seed.code}-${i + 1}`,
+      kind: commercial ? ("prefecture" as const) : ("official" as const),
+      asOf: commercial ? "2025-07-01" : SAMPLE_OFFICIAL_AS_OF,
       coordinates: [
         round(seed.center[0] + (rand() - 0.5) * 0.08, 5),
         round(seed.center[1] + (rand() - 0.5) * 0.06, 5),

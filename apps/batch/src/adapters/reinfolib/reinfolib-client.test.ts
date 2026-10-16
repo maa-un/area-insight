@@ -108,7 +108,7 @@ describe("ReinfolibClient", () => {
     ).toEqual([]);
     const url = new URL((fetchFn.mock.calls as unknown as [string][])[0]?.[0] ?? "");
     expect(url.searchParams.get("from")).toBe("20261");
-    expect(url.searchParams.get("landTypeCode")).toBe("02");
+    expect(url.searchParams.get("landTypeCode")).toBe("01,02");
   });
 
   it("reads stations as lines and keeps their geometry and properties", async () => {

@@ -3,6 +3,7 @@ import {
   AreaDetail,
   AreaMetricsFile,
   CompareList,
+  DistortionGap,
   LandPriceStats,
   MunicipalityCode,
   PREFECTURE_CODES,
@@ -62,7 +63,16 @@ describe("prefectureName", () => {
 describe("AreaMetricsFile", () => {
   it("accepts a file with nullable metrics", () => {
     const file = {
-      asOf: "2026-09-30",
+      updatedAt: "2026-10-01",
+      periods: {
+        trade: {
+          source: "不動産情報ライブラリ",
+          from: "2025-07-01",
+          to: "2026-06-30",
+          precision: "quarter",
+        },
+        officialLandPrice: { source: "地価公示", from: null, to: "2026-01-01", precision: "day" },
+      },
       sample: true,
       areas: [
         {
@@ -76,11 +86,34 @@ describe("AreaMetricsFile", () => {
           populationChangeRate: 2.1,
           grossYield: null,
           monthlyRent: null,
+          rentPerSqm: null,
+          landUnitPrice: null,
+          landTradeCount: 0,
+          landPriceChangeRate: null,
+          officialLandPrice: 1200000,
+          officialLandPriceChangeRate: 3.4,
+          landToOfficialRatio: null,
+          rentGap: 35,
+          landGap: null,
+          momentumGap: null,
+          weakDemand: false,
           center: [139.75, 35.69],
         },
       ],
     };
     expect(AreaMetricsFile.parse(file)).toEqual(file);
+  });
+
+  it("rejects a distortion gap outside -100 to 100 and an unknown period key", () => {
+    const file = AreaMetricsFile.parse({
+      updatedAt: "2026-10-01",
+      periods: {},
+      sample: true,
+      areas: [],
+    });
+    expect(AreaMetricsFile.safeParse({ ...file, periods: { unknown: file } }).success).toBe(false);
+    expect(DistortionGap.safeParse(120).success).toBe(false);
+    expect(DistortionGap.safeParse(-100).success).toBe(true);
   });
 
   it("rejects a quarter label in the wrong form", () => {

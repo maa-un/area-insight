@@ -30,9 +30,19 @@ const exportRows = {
       population_change_rate: -2.6,
       gross_yield: 6.1,
       monthly_rent: 121000,
+      rent_per_sqm: "1180",
+      land_unit_price: "52000",
+      land_trade_count: "88",
+      land_price_change_rate: 2.4,
+      official_land_price: "61000",
+      official_land_price_change_rate: 1.1,
+      land_to_official_ratio: 0.85,
+      rent_gap: "42",
+      land_gap: "-12",
+      momentum_gap: null,
+      weak_demand: false,
       center_lng: 137.97,
       center_lat: 36.23,
-      as_of: "2026-06-30",
     },
     {
       export_id: "2026-10-16T00:00:00.000Z",
@@ -46,9 +56,10 @@ const exportRows = {
       population_change_rate: null,
       gross_yield: null,
       monthly_rent: null,
+      land_trade_count: "0",
+      weak_demand: true,
       center_lng: null,
       center_lat: null,
-      as_of: "2026-06-30",
     },
   ],
   area_details: [
@@ -89,6 +100,8 @@ const exportRows = {
     {
       export_id: "2026-10-16T00:00:00.000Z",
       point_id: "15002260",
+      classification: "1",
+      as_of: "2025-07-01",
       code: "20202",
       longitude: 137.95,
       latitude: 36.24,
@@ -120,6 +133,59 @@ const exportRows = {
       median_area: "190",
       period_from: "2024Q3",
       period_to: "2026Q2",
+    },
+  ],
+  station_land_prices: [
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      station_name: "北松本",
+      line_names: ["大糸線"],
+      longitude: 137.96,
+      latitude: 36.24,
+      prefecture_code: "20",
+      city_codes: ["20202"],
+      count: "14",
+      low: "48000",
+      median: "56000",
+      high: "63000",
+      period_from: "2024Q3",
+      period_to: "2026Q2",
+      adjusted_to: "2026-01-01",
+      official_by_station_distance: [{ band: "within20", price: "64000", count: "2" }],
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      station_name: null,
+      line_names: [],
+      longitude: 137.1,
+      latitude: 36.1,
+      city_codes: ["20202"],
+      count: "3",
+      low: "1",
+      median: "1",
+      high: "1",
+      period_from: "2026Q1",
+      period_to: "2026Q2",
+      adjusted_to: null,
+      official_by_station_distance: [],
+    },
+  ],
+  data_periods: [
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      key: "trade",
+      source: "不動産情報ライブラリ（取引価格）",
+      from_date: "2025-07-01",
+      to_date: "2026-06-30",
+      precision: "quarter",
+    },
+    {
+      export_id: "2026-10-16T00:00:00.000Z",
+      key: "vacancy",
+      source: "住宅・土地統計調査",
+      from_date: null,
+      to_date: "2023-01-01",
+      precision: "year",
     },
   ],
   station_metrics: [
@@ -167,17 +233,45 @@ describe("prepare-data", () => {
     const data = convert(exportRows);
     const metrics = AreaMetricsFile.parse(data.metrics);
     expect(metrics.sample).toBe(false);
-    expect(metrics.asOf).toBe("2026-06-30");
+    expect(metrics.updatedAt).toBe("2026-10-16");
+    expect(metrics.periods.trade).toEqual({
+      source: "不動産情報ライブラリ（取引価格）",
+      from: "2025-07-01",
+      to: "2026-06-30",
+      precision: "quarter",
+    });
+    expect(metrics.periods.vacancy?.precision).toBe("year");
     expect(metrics.areas[0]).toMatchObject({
       population: 234111,
       tradeCount: 35,
+      landUnitPrice: 52000,
+      landTradeCount: 88,
+      landToOfficialRatio: 0.85,
+      rentGap: 42,
+      landGap: -12,
+      momentumGap: null,
+      weakDemand: false,
       center: [137.97, 36.23],
     });
-    expect(metrics.areas[1]?.center).toBeNull();
+    expect(metrics.areas[1]).toMatchObject({ center: null, landTradeCount: 0, weakDemand: true });
+
+    // 駅の土地の坪単価は、その市区町村の土地が取引された駅だけ。駅名の付かない点は出さない
+    const detail = AreaDetail.parse(data.details[0]);
+    expect(detail.stationLandPrices).toHaveLength(1);
+    expect(detail.stationLandPrices[0]).toMatchObject({
+      stationName: "北松本",
+      low: 48000,
+      high: 63000,
+      adjustedTo: "2026-01-01",
+      officialByStationDistance: [{ band: "within20", price: 64000, count: 2 }],
+    });
+    expect(AreaDetail.parse(data.details[1]).stationLandPrices).toEqual([]);
 
     expect(AreaDetail.parse(data.details[0]).recentTransactions[0]?.buildingYear).toBe(1998);
     expect(LandPricePoints.parse(data.landPrices)[0]).toMatchObject({
       price: 75200,
+      kind: "prefecture",
+      asOf: "2025-07-01",
       stationName: "北松本",
       stationDistance: 1200,
     });

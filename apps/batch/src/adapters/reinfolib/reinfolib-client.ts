@@ -113,12 +113,12 @@ export class ReinfolibClient implements PublicDataSource {
     });
   }
 
-  // XPT001: 「土地と建物」（landTypeCode 02）の取引価格。位置は物件の最寄り駅。
+  // XPT001: 「土地」（landTypeCode 01）と「土地と建物」（02）の取引価格。位置は物件の最寄り駅。
   async stationTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]> {
     return this.points("XPT001", tile, {
       from: `${from.year}${from.quarter}`,
       to: `${to.year}${to.quarter}`,
-      landTypeCode: "02",
+      landTypeCode: "01,02",
       priceClassification: "01",
     });
   }

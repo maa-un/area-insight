@@ -2,7 +2,10 @@ import { type AreaDetail, prefectureName, RELIABLE_TRADE_COUNT } from "@area-ins
 import { ArrowUpRight, ChevronRight, Map as MapIcon } from "lucide-react";
 import { AreaActions } from "@/components/area-actions";
 import { Chip, Eyebrow, PositionBar } from "@/components/brand";
+import { DataPeriodNote } from "@/components/data-period";
 import { LandPriceSection } from "@/components/land-prices";
+import { MarketDistortionSection } from "@/components/market-distortion";
+import { StationLandPriceSection } from "@/components/station-land-prices";
 import { TrendChart, yearName } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,6 +91,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
               <CardContent className="flex flex-col gap-1 px-4 text-xs text-muted-foreground">
                 <p>{note}</p>
                 {key === "tradePrice" && <p>取引件数 {formatCount(area.tradeCount, "件")}</p>}
+                <DataPeriodNote sources={METRICS[key].sources} />
                 {rank && (
                   <div className="flex flex-col gap-1.5">
                     <p>
@@ -109,6 +113,10 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         landPrices={detail.landPrices}
         official={detail.officialLandPrices}
       />
+
+      <StationLandPriceSection areaName={area.name} stations={detail.stationLandPrices} />
+
+      <MarketDistortionSection area={area} prefecture={prefecture} />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -133,6 +141,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
                   : `${area.monthlyRent.toLocaleString("ja-JP")}円/月`}{" "}
                 を入れた状態で PropFolio を開きます。
               </CardDescription>
+              <DataPeriodNote sources={["trade", "rent"]} />
             </CardHeader>
             <CardContent>
               <Button asChild className="w-full">
@@ -151,6 +160,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
                 {formatCount(area.population, "人")}（5 年で{" "}
                 {formatPercent(area.populationChangeRate, { signed: true })}）
               </CardDescription>
+              <DataPeriodNote sources={["population"]} />
             </CardHeader>
             <CardContent>
               <table className="w-full text-sm">

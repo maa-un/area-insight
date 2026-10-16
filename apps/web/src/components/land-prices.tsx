@@ -8,6 +8,7 @@ import {
 } from "@area-insight/shared";
 import { Landmark, Scale, TrainFront } from "lucide-react";
 import { useId, useState } from "react";
+import { DataPeriodNote } from "@/components/data-period";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,7 +118,7 @@ export function LandPriceSection({
             宅地（土地）の取引の ㎡単価。{period}の取引{" "}
             {landPrices.total.count.toLocaleString("ja-JP")} 件。幅は下位 25%〜上位 25%。
             {officialPrice !== null &&
-              "公示地価比は、住宅地の公示地価・地価調査の中央値に対する倍率。"}
+              "公示地価比は、住宅地の公示地価・基準地価の中央値に対する倍率。"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -164,9 +165,10 @@ function OfficialComparisonCard({
         </CardTitle>
         <CardDescription>
           {areaName}
-          の土地の取引単価（中央値）を、同じ市区町村の住宅地の公示地価・地価調査（地点の中央値）と比べます。
+          の土地の取引単価（中央値）を、同じ市区町村の住宅地の公示地価・基準地価（地点の中央値）と比べます。
           1 倍未満なら、公示地価より安く取引されています。
         </CardDescription>
+        <DataPeriodNote sources={["landTrade", "officialLandPrice", "prefectureLandPrice"]} />
       </CardHeader>
       <CardContent>
         {official.residential === null || ratio === null || verdict === null ? (
@@ -221,9 +223,10 @@ function StationDistanceCard({
           駅からの距離別の公示地価
         </CardTitle>
         <CardDescription>
-          {areaName}の住宅地の公示地価・地価調査の地点を、最寄り駅までの道路距離で分けた中央値。徒歩
+          {areaName}の住宅地の公示地価・基準地価の地点を、最寄り駅までの道路距離で分けた中央値。徒歩
           1 分 = {METERS_PER_WALK_MINUTE}m。
         </CardDescription>
+        <DataPeriodNote sources={["officialLandPrice", "prefectureLandPrice"]} />
       </CardHeader>
       <CardContent>
         {bands.length === 0 ? (
