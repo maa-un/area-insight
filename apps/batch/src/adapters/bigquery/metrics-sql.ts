@@ -19,6 +19,16 @@ const POPULATION_YEARS = 5;
 const STATION_MATCH_METERS = 300;
 // 市区町村ページに出す直近の取引の件数。
 const RECENT_TRANSACTIONS = 8;
+// 地価の用途区分のうち、取引単価と比べるもの（API は「0,住宅地」の形で返す。番号を除いた名前で比べる）。
+const RESIDENTIAL_USE = "住宅地";
+// 駅からの距離を徒歩の分に直す基準（不動産の表示規約: 80m を 1 分とする）。
+const METERS_PER_WALK_MINUTE = 80;
+// 駅からの距離の区切り（徒歩 10 分以内・20 分以内・それ以上）。
+const STATION_DISTANCE_BANDS = [
+  { band: "within10", maxMinutes: 10 },
+  { band: "within20", maxMinutes: 20 },
+] as const;
+const BEYOND_BAND = "over20";
 
 // 「1億2,000万円」「2,000万円」→ 万円。形が違えば NULL。
 // 実データでは「4,700万円」「9.6万円」の形で返る（2026-10 時点で「億」は使われていない）。小数も読む。
@@ -32,11 +42,31 @@ const manYen = (column: string) => `IF(
 const leadingNumber = (column: string) =>
   `SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'^([\\d,]+)'), ',', '') AS INT64)`;
 
+// 「0,住宅地」「4,商業地」→「住宅地」「商業地」。番号の無い「住宅地」はそのまま。
+const categoryName = (column: string) => `REGEXP_EXTRACT(${column}, r'([^,]+)$')`;
+
+// 最寄り駅までの道路距離「150m」「1,200m」「1.2km」→ m。形が違えば NULL（実データの形は 2026-10 に確かめる）。
+const distanceMeters = (column: string) => `CASE
+      WHEN REGEXP_CONTAINS(${column}, r'km') THEN
+        SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'([\\d,]*\\.?\\d+)\\s*km'), ',', '') AS FLOAT64) * 1000
+      ELSE SAFE_CAST(REPLACE(REGEXP_EXTRACT(${column}, r'([\\d,]*\\.?\\d+)\\s*m'), ',', '') AS FLOAT64)
+    END`;
+
 // v0.2.0 までは JSON 型の列に JSON.stringify した文字列を入れていたため、「JSON の文字列」として
 // 保存された行がある。どちらの形でも中身を読めるよう、文字列なら JSON として読み直す。
 const json = (column: string) =>
   `IF(JSON_TYPE(${column}) = 'string', SAFE.PARSE_JSON(JSON_VALUE(${column})), ${column})`;
 const prop = (column: string, path: string) => `JSON_VALUE(${json(column)}, '${path}')`;
+
+// 駅からの距離（m）→ 区分の名前（within10 / within20 / over20）。
+const stationDistanceBand = (column: string) =>
+  `CASE ${STATION_DISTANCE_BANDS.map(
+    ({ band, maxMinutes }) =>
+      `WHEN ${column} <= ${maxMinutes * METERS_PER_WALK_MINUTE} THEN '${band}'`,
+  ).join(" ")} ELSE '${BEYOND_BAND}' END`;
+// 区分の並び順（近い順）。
+const stationDistanceBandOrder = (column: string) =>
+  `CASE ${column} ${STATION_DISTANCE_BANDS.map(({ band }, i) => `WHEN '${band}' THEN ${i}`).join(" ")} ELSE ${STATION_DISTANCE_BANDS.length} END`;
 
 export type MetricsSql = {
   // 指標のテーブルを作り直す（CREATE OR REPLACE）
@@ -190,30 +220,56 @@ export function metricsSql(dataset: string): MetricsSql {
       FROM ${t("raw_statistics")}
       WHERE table_name = 'resident_population' AND SAFE_CAST(value AS FLOAT64) IS NOT NULL
       GROUP BY code
+    ),
+    -- 住宅地の地価（公示地価・地価調査の最新年の地点）。取引単価との比較の基準にする
+    residential AS (
+      SELECT code, price, station_distance_m FROM ${t("land_price_points")} WHERE use = '${RESIDENTIAL_USE}'
+    ),
+    official AS (
+      SELECT code, ROUND(APPROX_QUANTILES(price, 100)[SAFE_OFFSET(50)]) AS price, COUNT(*) AS count
+      FROM residential GROUP BY code
+    ),
+    -- 駅からの距離別（徒歩 10 分以内・20 分以内・それ以上）の住宅地の地価。距離の無い地点は数えない
+    by_distance AS (
+      SELECT code, ARRAY_AGG(STRUCT(band, price, count) ORDER BY ${stationDistanceBandOrder("band")}) AS bands
+      FROM (
+        SELECT code, band, ROUND(APPROX_QUANTILES(price, 100)[SAFE_OFFSET(50)]) AS price, COUNT(*) AS count
+        FROM (
+          SELECT code, price, ${stationDistanceBand("station_distance_m")} AS band
+          FROM residential WHERE station_distance_m IS NOT NULL
+        ) GROUP BY code, band
+      ) GROUP BY code
     )
     SELECT
       m.code,
       IFNULL(quarters.quarters, []) AS quarters,
       IFNULL(years.years, []) AS years,
       IFNULL(population.population_history, []) AS population_history,
-      IFNULL(recent.recent_transactions, []) AS recent_transactions
+      IFNULL(recent.recent_transactions, []) AS recent_transactions,
+      IF(official.code IS NULL, NULL, STRUCT(official.price, official.count)) AS official_land_price,
+      IFNULL(by_distance.bands, []) AS land_prices_by_station_distance
     FROM ${t("raw_municipalities")} AS m
     LEFT JOIN quarters USING (code)
     LEFT JOIN years USING (code)
     LEFT JOIN recent USING (code)
-    LEFT JOIN population USING (code)`;
+    LEFT JOIN population USING (code)
+    LEFT JOIN official USING (code)
+    LEFT JOIN by_distance USING (code)`;
 
-  // 地価は最新の年の地点だけを出す（地価公示と地価調査の両方）。
+  // 地価は最新の年の地点だけを出す（地価公示と地価調査の両方）。area_details がこの表を読むため、先に作る。
   const landPricePoints = `
     CREATE OR REPLACE TABLE ${t("land_price_points")} AS
     SELECT
       ${prop("properties", "$.point_id")} AS point_id,
+      ${prop("properties", "$.city_code")} AS code,
       SUBSTR(${prop("properties", "$.city_code")}, 1, 2) AS prefecture_code,
       longitude, latitude,
       ${leadingNumber(prop("properties", "$.u_current_years_price_ja"))} AS price,
       SAFE_CAST(${prop("properties", "$.year_on_year_change_rate")} AS FLOAT64) AS change_rate,
-      IFNULL(${prop("properties", "$.use_category_name_ja")}, '') AS use,
-      IFNULL(${prop("properties", "$.location")}, '') AS location
+      IFNULL(${categoryName(prop("properties", "$.use_category_name_ja"))}, '') AS use,
+      IFNULL(${prop("properties", "$.location")}, '') AS location,
+      ${prop("properties", "$.nearest_station_name_ja")} AS station_name,
+      ${distanceMeters(prop("properties", "$.u_road_distance_to_nearest_station_name_ja"))} AS station_distance_m
     FROM ${t("raw_land_prices")}
     WHERE target_year_start = (SELECT MAX(target_year_start) FROM ${t("raw_land_prices")})
       AND ${leadingNumber(prop("properties", "$.u_current_years_price_ja"))} IS NOT NULL`;
@@ -307,7 +363,7 @@ export function metricsSql(dataset: string): MetricsSql {
     FROM stats, period`;
 
   return {
-    rebuild: [areaMetrics, areaDetails, districtLandPrices, landPricePoints, stationMetrics],
+    rebuild: [areaMetrics, landPricePoints, areaDetails, districtLandPrices, stationMetrics],
     exports: (bucket, exportId) =>
       [
         "area_metrics",

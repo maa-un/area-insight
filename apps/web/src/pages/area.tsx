@@ -104,7 +104,11 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         })}
       </section>
 
-      <LandPriceSection areaName={area.name} landPrices={detail.landPrices} />
+      <LandPriceSection
+        areaName={area.name}
+        landPrices={detail.landPrices}
+        official={detail.officialLandPrices}
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
