@@ -7,12 +7,23 @@ import {
 } from "@area-insight/shared";
 import { sampleLandPrices, sampleMetrics, sampleStations } from "./sample";
 
-// 画面が使うデータの入口。今はサンプルデータを返す。集計ジョブの書き出しができたら、
-// ビルド時にデータ用バケットから取ったファイルをここで読み込むように差し替える。
+// 画面が使うデータの入口。ビルド前に scripts/prepare-data.mjs が集計ジョブの書き出しを
+// src/data/generated/ に置いていればそれを使い、無ければサンプルデータを使う。
 // どちらの場合も同じ zod スキーマで検証し、形が違えばビルドを失敗させる。
-export const dataset = AreaMetricsFile.parse(sampleMetrics);
-export const landPrices = LandPricePoints.parse(sampleLandPrices);
-export const stations = StationMetricsList.parse(sampleStations);
+const generated = import.meta.glob<unknown>("./generated/*.json", {
+  eager: true,
+  import: "default",
+});
+
+export const dataset = AreaMetricsFile.parse(
+  generated["./generated/metrics.json"] ?? sampleMetrics,
+);
+export const landPrices = LandPricePoints.parse(
+  generated["./generated/land-prices.json"] ?? sampleLandPrices,
+);
+export const stations = StationMetricsList.parse(
+  generated["./generated/stations.json"] ?? sampleStations,
+);
 
 const byCode = new Map(dataset.areas.map((area) => [area.code, area]));
 
@@ -58,15 +69,18 @@ export function prefectureRank(area: AreaMetrics, key: MetricKey) {
 }
 
 // 代表点が近い順の市区町村。
+// 位置が分からない市区町村は、同じ都道府県の市区町村を返す。
 export function nearbyAreas(area: AreaMetrics, limit = 4): AreaMetrics[] {
-  const [lng, lat] = area.center;
+  const others = dataset.areas.filter((a) => a.code !== area.code);
+  const center = area.center;
+  if (!center)
+    return others.filter((a) => a.prefectureCode === area.prefectureCode).slice(0, limit);
+  const [lng, lat] = center;
   const distance = (other: AreaMetrics) => {
+    if (!other.center) return Number.POSITIVE_INFINITY;
     const dx = (other.center[0] - lng) * Math.cos((lat * Math.PI) / 180);
     const dy = other.center[1] - lat;
     return dx * dx + dy * dy;
   };
-  return dataset.areas
-    .filter((a) => a.code !== area.code)
-    .sort((a, b) => distance(a) - distance(b))
-    .slice(0, limit);
+  return others.sort((a, b) => distance(a) - distance(b)).slice(0, limit);
 }

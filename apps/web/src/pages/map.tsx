@@ -13,6 +13,7 @@ import {
 } from "@/data";
 import {
   formatCount,
+  formatManYen,
   formatMetric,
   formatPercent,
   formatYenPerSqm,
@@ -60,7 +61,7 @@ export function MapPage() {
     let cancelled = false;
     void import("@/lib/map-engine").then(async ({ createMap }) => {
       const map = await createMap(node, {
-        initial: focus ? { center: focus.center, zoom: 10 } : undefined,
+        initial: focus?.center ? { center: focus.center, zoom: 10 } : undefined,
         onSelect: setSelection,
       });
       if (cancelled) {
@@ -96,10 +97,16 @@ export function MapPage() {
     if (!ready) return;
     controller.current?.setData(
       "areas",
-      dataset.areas.map((a) => ({
-        coordinates: a.center,
-        properties: { code: a.code, name: a.name, color: scale.colorOf(a[metric]) },
-      })),
+      dataset.areas.flatMap((a) =>
+        a.center
+          ? [
+              {
+                coordinates: a.center,
+                properties: { code: a.code, name: a.name, color: scale.colorOf(a[metric]) },
+              },
+            ]
+          : [],
+      ),
     );
   }, [ready, metric, scale]);
 
@@ -259,10 +266,12 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
   return (
     <div className={box}>
       <p className="text-xs text-muted-foreground">駅ごとの取引相場（直近 4 四半期）</p>
-      <p className="font-semibold">{String(p.name)}</p>
-      <UnitPrice perSqm={Number(p.unitPrice)} />
+      <p className="font-semibold">
+        {p.cityName ? `${String(p.cityName)}の駅` : "この駅"}を最寄りとする中古戸建
+      </p>
+      <p className="text-lg tabular-nums">{formatManYen(Number(p.medianPrice))}</p>
       <p className="text-muted-foreground">
-        取引 {formatCount(Number(p.count), "件")}・㎡単価の中央値
+        取引総額の中央値・取引 {formatCount(Number(p.count), "件")}
       </p>
     </div>
   );

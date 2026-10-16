@@ -7,6 +7,8 @@ const Env = z.object({
   BIGQUERY_DATASET: z.string().min(1),
   REINFOLIB_API_KEY: z.string().min(1).optional(),
   ESTAT_APP_ID: z.string().min(1).optional(),
+  // 集計ジョブが画面向けのファイルを書き出すバケット
+  DATA_BUCKET: z.string().min(1).optional(),
   // 公的 API はレート制限の数値を公開していないため、控えめな間隔で呼ぶ。
   REQUEST_INTERVAL_MS: z.coerce.number().int().min(0).default(1000),
 });
@@ -22,7 +24,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return parsed.data;
 }
 
-export function requireSecret(config: Config, name: "REINFOLIB_API_KEY" | "ESTAT_APP_ID"): string {
+export function requireSecret(
+  config: Config,
+  name: "REINFOLIB_API_KEY" | "ESTAT_APP_ID" | "DATA_BUCKET",
+): string {
   const value = config[name];
   if (!value) throw new Error(`missing environment variable: ${name}`);
   return value;
