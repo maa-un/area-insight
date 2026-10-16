@@ -92,7 +92,8 @@ export function metricsSql(dataset: string): MetricsSql {
       JOIN population AS now ON now.code = l.code AND now.year = l.year
       LEFT JOIN population AS past ON past.code = l.code AND past.year = l.year - ${POPULATION_YEARS}
     ),
-    -- 市区町村の代表点。境界データを入れるまでは、地価の地点（無ければ駅）の平均位置で代用する
+    -- 市区町村の代表点。画面はビルド時に境界（国土数値情報 N03）の重心で置き換える（apps/web/scripts/prepare-data.mjs）。
+    -- ここでは境界に無い市区町村のための控えとして、地価の地点（無ければ駅）の平均位置を出す
     land_center AS (
       SELECT JSON_VALUE(properties, '$.city_code') AS code, AVG(longitude) AS lng, AVG(latitude) AS lat
       FROM ${t("raw_land_prices")} GROUP BY code

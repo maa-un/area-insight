@@ -118,6 +118,7 @@ function SiteFooter() {
 //   不動産情報ライブラリ: 利用規約「コンテンツの利用に係るPDL1.0に関する重要情報」と API 利用規約 第 7 条
 //   e-Stat: API 機能のクレジット表示（https://www.e-stat.go.jp/api/api-info/credit）
 //   地理院タイル: 国土地理院の地理院タイル利用規約
+//   国土数値情報（行政区域）: CC BY 4.0（PDL1.0 の追加記載例どおり、加工したことと作成者を示す）
 const link = "underline underline-offset-2 hover:text-foreground";
 
 function Credits() {
@@ -142,6 +143,18 @@ function Credits() {
       <p>
         取引価格の中央値・推移・想定利回りは「不動産取引価格情報」（国土交通省）をもとに合同会社Maa'un
         Japan が作成しました。
+      </p>
+      <p>
+        地図の市区町村の境界：
+        <a
+          className={link}
+          href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html"
+          target="_blank"
+          rel="noopener"
+        >
+          国土数値情報（行政区域データ）
+        </a>
+        （国土交通省）をもとに合同会社Maa'un Japan 作成
       </p>
       <p>
         このサービスは、国土交通省の不動産情報ライブラリのAPI機能を使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません。

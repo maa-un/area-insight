@@ -1,7 +1,9 @@
 // 行政区域の境界（国土数値情報 N03 の GeoJSON）を、地図の塗り分けに使える軽さに間引く。
-//   node scripts/build-boundaries.mjs <行政区域.geojson> <出力.geojson> [許容誤差（度）]
-// 出力は市区町村（政令指定都市は行政区）ごとに 1 地物で、属性は code（5 桁）だけ。代表点 center も付ける。
-//   - Douglas–Peucker 法で頂点を間引く（既定 0.001 度 ≒ 100m）
+//   node scripts/build-boundaries.mjs <行政区域.geojson> <出力.json> [許容誤差（度）]
+// 画面の地図はこの出力を apps/web/src/data/boundaries.json として同梱して使う（年 1 回の更新で作り直す）。
+//   node apps/batch/scripts/build-boundaries.mjs N03-20260101.geojson apps/web/src/data/boundaries.json
+// 出力は市区町村（政令指定都市は行政区）ごとに 1 地物で、属性は code（5 桁）と代表点 center だけ。
+//   - Douglas–Peucker 法で頂点を間引く（既定 0.002 度 ≒ 200m。全国で 3.0MB、gzip で 0.7MB。東京の区の境界まで判読できる）
 //   - 間引くとほぼ面積の無くなる小さな島は落とす
 //   - 座標は小数 4 桁（約 10m）に丸める
 // 出典: 国土数値情報（行政区域データ）（国土交通省）をもとに合同会社Maa'un Japan 作成（CC BY 4.0）
@@ -16,7 +18,7 @@ if (!input || !output) {
   );
   process.exit(1);
 }
-const TOLERANCE = Number(toleranceArg ?? 0.001);
+const TOLERANCE = Number(toleranceArg ?? 0.002);
 const MIN_AREA = TOLERANCE * TOLERANCE * 4; // これより小さい輪は描いても見えない
 
 const round = (value) => Math.round(value * 1e4) / 1e4;

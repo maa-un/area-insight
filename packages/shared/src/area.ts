@@ -31,7 +31,7 @@ export const AreaMetrics = z.object({
   grossYield: z.number().nonnegative().nullable(),
   // 家賃相場（円/月）。PropFolio へ渡す
   monthlyRent: z.number().int().nonnegative().nullable(),
-  // 地図で市区町村を指す位置（代表点）。位置の分かるデータが無い市区町村は null（地図に出さない）
+  // 市区町村を指す位置（代表点）。境界の最大の面の重心。位置の分かるデータが無い市区町村は null
   center: LngLat.nullable(),
 });
 export type AreaMetrics = z.infer<typeof AreaMetrics>;
@@ -103,3 +103,17 @@ export type StationMetrics = z.infer<typeof StationMetrics>;
 
 export const LandPricePoints = z.array(LandPricePoint);
 export const StationMetricsList = z.array(StationMetrics);
+
+// 市区町村の境界（apps/batch/scripts/build-boundaries.mjs の出力）。地図のページだけが読み込む。
+// 頂点は数十万あり、1 つずつ検証すると遅いため、座標の中身までは確かめない（MapLibre が描けない点は捨てる）。
+export const Boundaries = z.object({
+  type: z.literal("FeatureCollection"),
+  features: z.array(
+    z.object({
+      type: z.literal("Feature"),
+      properties: z.object({ code: MunicipalityCode, center: LngLat }),
+      geometry: z.object({ type: z.literal("MultiPolygon"), coordinates: z.array(z.unknown()) }),
+    }),
+  ),
+});
+export type Boundaries = z.infer<typeof Boundaries>;
