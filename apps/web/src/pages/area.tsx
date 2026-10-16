@@ -2,7 +2,7 @@ import { type AreaDetail, prefectureName, RELIABLE_TRADE_COUNT } from "@area-ins
 import { ArrowUpRight, ChevronRight, Map as MapIcon } from "lucide-react";
 import { AreaActions } from "@/components/area-actions";
 import { LandPriceSection } from "@/components/land-prices";
-import { TrendChart } from "@/components/trend-chart";
+import { TrendChart, yearName } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,11 +87,11 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>取引価格の推移</CardTitle>
-            <CardDescription>四半期ごとの中央値（過去 5 年）</CardDescription>
+            <CardDescription>宅地（土地と建物）の取引価格の中央値（過去 5 年）</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <TrendChart quarters={detail.quarters} />
-            <YearTable years={detail.years} />
+            <TrendChart quarters={detail.quarters} years={detail.years} />
+            <YearTable years={detail.years} latestQuarter={detail.quarters.at(-1)?.period} />
           </CardContent>
         </Card>
 
@@ -218,7 +218,13 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
   );
 }
 
-function YearTable({ years }: { years: AreaDetail["years"] }) {
+function YearTable({
+  years,
+  latestQuarter,
+}: {
+  years: AreaDetail["years"];
+  latestQuarter: string | undefined;
+}) {
   return (
     <table className="w-full text-sm">
       <thead className="text-left text-muted-foreground">
@@ -242,7 +248,7 @@ function YearTable({ years }: { years: AreaDetail["years"] }) {
           .reverse()
           .map((row) => (
             <tr key={row.year} className="border-b last:border-0">
-              <td className="py-2">{row.year}年</td>
+              <td className="py-2">{yearName(row.year, latestQuarter)}</td>
               <td className="py-2 text-right">{formatManYen(row.price)}</td>
               <td
                 className={
