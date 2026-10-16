@@ -557,7 +557,9 @@ export const sampleLandPrices: LandPricePoint[] = SEEDS.flatMap((seed) => {
 export const sampleStations: StationMetrics[] = SEEDS.flatMap((seed) => {
   const rand = random(`${seed.code}:station`);
   return Array.from({ length: 2 }, (_, i) => ({
-    cityName: `${seed.name}（サンプル ${i + 1}）`,
+    stationName: `${seed.name}サンプル${i + 1}`,
+    lineNames: ["サンプル線"],
+    cityName: seed.name,
     coordinates: [
       round(seed.center[0] + (rand() - 0.5) * 0.05, 5),
       round(seed.center[1] + (rand() - 0.5) * 0.04, 5),

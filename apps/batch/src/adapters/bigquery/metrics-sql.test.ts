@@ -26,4 +26,12 @@ describe("metricsSql", () => {
   it("only counts detached houses (land and building)", () => {
     expect(sql.rebuild[0]).toContain("type = '宅地(土地と建物)'");
   });
+
+  it("names each station point after the nearest station line", () => {
+    const stationMetrics = sql.rebuild[3] ?? "";
+    expect(stationMetrics).toContain("`proj.ds.raw_stations`");
+    expect(stationMetrics).toContain(
+      "ST_DWITHIN(ST_GEOGPOINT(p.longitude, p.latitude), s.geography, 300)",
+    );
+  });
 });

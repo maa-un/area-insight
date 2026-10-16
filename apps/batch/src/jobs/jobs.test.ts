@@ -4,6 +4,7 @@ import type {
   PointRecord,
   PublicDataSource,
   RawDataStore,
+  StationRecord,
   StatisticRecord,
   StatisticsSource,
   StatisticsTable,
@@ -13,7 +14,7 @@ import type {
 } from "../ports.js";
 import type { Quarter } from "../quarters.js";
 import { fetchMunicipalities } from "./municipalities.js";
-import { fetchLandPrices, fetchStationTransactions } from "./points.js";
+import { fetchLandPrices, fetchStations, fetchStationTransactions } from "./points.js";
 import { fetchStatistics } from "./statistics.js";
 import { fetchTransactions } from "./transactions.js";
 
@@ -40,6 +41,13 @@ class FakeSource implements PublicDataSource {
       `station:${tile.z}/${tile.x}/${tile.y}:${from.year}Q${from.quarter}-${to.year}Q${to.quarter}`,
     );
     return [{ coordinates: [139.7, 35.6], properties: { tile: tile.x } }];
+  }
+
+  async stations(tile: Tile): Promise<StationRecord[]> {
+    this.calls.push(`stations:${tile.z}/${tile.x}/${tile.y}`);
+    return tile.x === 1
+      ? [{ geometry: { type: "LineString", coordinates: [] }, properties: { S12_001_ja: "新宿" } }]
+      : [];
   }
 }
 
@@ -71,6 +79,7 @@ class FakeStore implements RawDataStore {
   readonly transactions = new Map<string, unknown[]>();
   readonly landPrices = new Map<number, unknown[]>();
   stations: unknown[] = [];
+  stationLines: unknown[] = [];
   statistics: unknown[] = [];
 
   async replaceLandPrices(year: number, rows: readonly unknown[]): Promise<void> {
@@ -79,6 +88,10 @@ class FakeStore implements RawDataStore {
 
   async replaceStationTransactions(_period: unknown, rows: readonly unknown[]): Promise<void> {
     this.stations = [...rows];
+  }
+
+  async replaceStations(rows: readonly unknown[]): Promise<void> {
+    this.stationLines = [...rows];
   }
 
   async replaceStatistics(rows: readonly unknown[]): Promise<void> {
@@ -151,6 +164,17 @@ describe("fetchStationTransactions", () => {
     expect(await fetchStationTransactions(source, new FakeTiles(), store, period, now)).toBe(2);
     expect(source.calls[0]).toBe("station:11/1/1:2025Q3-2026Q2");
     expect(store.stations).toHaveLength(2);
+  });
+});
+
+describe("fetchStations", () => {
+  it("collects stations from every tile at the station zoom and replaces them all", async () => {
+    const source = new FakeSource();
+    const store = new FakeStore();
+
+    expect(await fetchStations(source, new FakeTiles(), store, now)).toBe(1);
+    expect(source.calls).toEqual(["stations:11/1/1", "stations:11/2/1"]);
+    expect(store.stationLines).toHaveLength(1);
   });
 });
 

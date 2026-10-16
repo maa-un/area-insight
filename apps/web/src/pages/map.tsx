@@ -85,7 +85,8 @@ export function MapPage() {
         "stations",
         stations.map((s) => ({
           coordinates: s.coordinates,
-          properties: { ...s, coordinates: null },
+          // 地図の属性に配列を入れると押したときに JSON 文字列で返るため、路線名は表示用の文字列にしておく
+          properties: { ...s, coordinates: null, lineNames: null, lines: formatLines(s.lineNames) },
         })),
       );
       if (focus) setSelection({ layer: "areas", properties: { code: focus.code } });
@@ -284,15 +285,36 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
   return (
     <div className={box}>
       <p className="text-xs text-muted-foreground">駅ごとの取引相場（直近 4 四半期）</p>
-      <p className="font-semibold">
-        {p.cityName ? `${String(p.cityName)}の駅` : "この駅"}を最寄りとする中古戸建
-      </p>
+      <div>
+        <p className="text-lg font-semibold">
+          {/* 近くに駅が見つからなかった点は、以前と同じく市区町村名で示す */}
+          {p.stationName
+            ? `${String(p.stationName)}駅`
+            : p.cityName
+              ? `${String(p.cityName)}の駅`
+              : "この駅"}
+          {p.stationName && p.cityName ? (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              {String(p.cityName)}
+            </span>
+          ) : null}
+        </p>
+        {p.lines ? <p className="text-xs text-muted-foreground">{String(p.lines)}</p> : null}
+      </div>
+      <p className="font-semibold">この駅を最寄りとする中古戸建</p>
       <p className="text-lg tabular-nums">{formatManYen(Number(p.medianPrice))}</p>
       <p className="text-muted-foreground">
         取引総額の中央値・取引 {formatCount(Number(p.count), "件")}
       </p>
     </div>
   );
+}
+
+// 路線名を並べる。大きな駅は 10 路線を超えるため、先頭の数路線だけを出して残りは数で示す。
+const SHOWN_LINES = 4;
+function formatLines(lines: readonly string[]): string {
+  const shown = lines.slice(0, SHOWN_LINES).join("・");
+  return lines.length > SHOWN_LINES ? `${shown} ほか ${lines.length - SHOWN_LINES} 路線` : shown;
 }
 
 // ㎡単価と坪単価を並べて出す。不動産の広告や査定では坪単価で話すことが多いため。

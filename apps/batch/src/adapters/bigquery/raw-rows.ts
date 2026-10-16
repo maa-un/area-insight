@@ -1,6 +1,7 @@
 import type {
   MunicipalityRecord,
   PointRecord,
+  StationRecord,
   StatisticRecord,
   StatisticsTable,
   TransactionRecord,
@@ -160,6 +161,24 @@ export function stationTransactionRow(
     period_from: quarterStartDate(from),
     period_to: quarterStartDate(to),
     ...pointRow(record, fetchedAt),
+  };
+}
+
+// 駅（XKT015）。形（GeoJSON の geometry）と属性を JSON のまま持つ。最寄りの駅を探すのは集計の SQL で行う。
+export const RAW_STATIONS: TableSpec = {
+  name: "raw_stations",
+  schema: [
+    { name: "geometry", type: "JSON", mode: "REQUIRED" },
+    { name: "properties", type: "JSON", mode: "REQUIRED" },
+    { name: "fetched_at", type: "TIMESTAMP", mode: "REQUIRED" },
+  ],
+};
+
+export function stationRow(record: StationRecord, fetchedAt: Date): Record<string, unknown> {
+  return {
+    geometry: JSON.stringify(record.geometry),
+    properties: JSON.stringify(record.properties),
+    fetched_at: fetchedAt.toISOString(),
   };
 }
 

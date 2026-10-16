@@ -92,9 +92,12 @@ export const LandPricePoint = z.object({
 export type LandPricePoint = z.infer<typeof LandPricePoint>;
 
 // 駅ごとの取引相場（XPT001）。位置は物件の最寄り駅。
-// API が駅名を返さず、「土地と建物」の㎡単価も空のため、取引総額の中央値と件数を持つ。
+// 「土地と建物」の㎡単価が空のため、取引総額の中央値と件数を持つ。
+// XPT001 は駅名を返さないため、駅名と路線名は集計で最寄りの駅（XKT015）から付ける。
 export const StationMetrics = z.object({
-  cityName: z.string().nullable(), // 駅のある市区町村（駅名の代わりに表示する）
+  stationName: z.string().nullable(), // 近くに駅が見つからなければ null
+  lineNames: z.array(z.string()), // 同じ名前の駅（運営会社をまたぐ）に通る路線
+  cityName: z.string().nullable(), // 駅のある市区町村
   coordinates: LngLat,
   medianPrice: z.number().nonnegative(), // 取引総額の中央値（万円）
   count: z.number().int().nonnegative(),

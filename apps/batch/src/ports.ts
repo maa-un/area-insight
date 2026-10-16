@@ -18,6 +18,13 @@ export type PointRecord = {
   readonly properties: Readonly<Record<string, unknown>>;
 };
 
+// 駅 1 件（XKT015、元は国土数値情報 S12）。駅はホームの区間を表す線で返る。
+// 形と属性は取得元のまま持ち、XPT001 の点との突き合わせは集計で行う。
+export type StationRecord = {
+  readonly geometry: Readonly<Record<string, unknown>>; // GeoJSON の geometry（LineString など）
+  readonly properties: Readonly<Record<string, unknown>>;
+};
+
 // 統計値 1 件（e-Stat）。値は「-」や「***」などの記号も含めて文字列のまま持つ。
 export type StatisticRecord = {
   readonly areaCode: string;
@@ -42,6 +49,8 @@ export interface PublicDataSource {
   landPrices(tile: Tile, year: number, classification: "0" | "1"): Promise<PointRecord[]>;
   // XPT001: 最寄り駅の位置に置かれた「土地と建物」の取引
   stationTransactions(tile: Tile, from: Quarter, to: Quarter): Promise<PointRecord[]>;
+  // XKT015: 駅の位置・駅名・路線名（駅別乗降客数）
+  stations(tile: Tile): Promise<StationRecord[]>;
 }
 
 // 政府統計（e-Stat）。
@@ -77,6 +86,8 @@ export interface RawDataStore {
     rows: readonly PointRecord[],
     fetchedAt: Date,
   ): Promise<void>;
+  // 駅は年に 1 度更新される全国のデータのため、全体を置き換える。
+  replaceStations(rows: readonly StationRecord[], fetchedAt: Date): Promise<void>;
   // 統計は対象の表をまとめて取り直し、全体を置き換える。
   replaceStatistics(
     rows: readonly { table: StatisticsTable; record: StatisticRecord }[],

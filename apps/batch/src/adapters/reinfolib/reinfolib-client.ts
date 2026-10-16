@@ -3,6 +3,7 @@ import type {
   MunicipalityRecord,
   PointRecord,
   PublicDataSource,
+  StationRecord,
   Tile,
   TransactionRecord,
 } from "../../ports.js";
@@ -64,6 +65,16 @@ const PointCollection = z.looseObject({
   ),
 });
 
+// XKT015 は GeoJSON の線（駅のホームの区間）で返る。形と属性は加工せずに保存するため、中身は検証しない。
+const FeatureCollection = z.looseObject({
+  features: z.array(
+    z.looseObject({
+      geometry: z.looseObject({ type: z.string(), coordinates: z.array(z.unknown()) }),
+      properties: z.record(z.string(), z.unknown()).nullable(),
+    }),
+  ),
+});
+
 export type ReinfolibClientOptions = FetcherOptions & { apiKey: string };
 
 // 取得元（PublicDataSource）の実装。
@@ -112,12 +123,31 @@ export class ReinfolibClient implements PublicDataSource {
     });
   }
 
-  // データが無いタイルは空の配列（または 404）で返る。
+  // XKT015: 国土数値情報（駅別乗降客数）。駅名・路線名・運営会社と、駅の位置（線）を持つ。
+  async stations(tile: Tile): Promise<StationRecord[]> {
+    const body = await this.tile("XKT015", tile, {});
+    if (body === null) return [];
+    return FeatureCollection.parse(body).features.map((feature) => ({
+      geometry: feature.geometry,
+      properties: feature.properties ?? {},
+    }));
+  }
+
   private async points(
     api: string,
     tile: Tile,
     params: Record<string, string>,
   ): Promise<PointRecord[]> {
+    const body = await this.tile(api, tile, params);
+    if (body === null) return [];
+    return PointCollection.parse(body).features.map((feature) => ({
+      coordinates: [feature.geometry.coordinates[0], feature.geometry.coordinates[1]],
+      properties: feature.properties ?? {},
+    }));
+  }
+
+  // データが無いタイルは空の配列（または 404）で返る。どちらも null にそろえる。
+  private async tile(api: string, tile: Tile, params: Record<string, string>): Promise<unknown> {
     const body = await this.get(api, {
       response_format: "geojson",
       z: String(tile.z),
@@ -125,11 +155,7 @@ export class ReinfolibClient implements PublicDataSource {
       y: String(tile.y),
       ...params,
     });
-    if (body === null || (Array.isArray(body) && body.length === 0)) return [];
-    return PointCollection.parse(body).features.map((feature) => ({
-      coordinates: [feature.geometry.coordinates[0], feature.geometry.coordinates[1]],
-      properties: feature.properties ?? {},
-    }));
+    return body === null || (Array.isArray(body) && body.length === 0) ? null : body;
   }
 
   private get(api: string, params: Record<string, string>): Promise<unknown> {
