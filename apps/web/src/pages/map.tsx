@@ -11,7 +11,13 @@ import {
   type MetricKey,
   stations,
 } from "@/data";
-import { formatCount, formatMetric, formatPercent, formatYenPerSqm } from "@/lib/format";
+import {
+  formatCount,
+  formatMetric,
+  formatPercent,
+  formatYenPerSqm,
+  formatYenPerTsubo,
+} from "@/lib/format";
 import type { LayerId, MapController, Selection } from "@/lib/map-engine";
 import { NO_DATA_COLOR, quantileScale, SCALE_COLORS } from "@/lib/map-scale";
 import { replaceSearchParams, useSearchParams } from "@/lib/search-params";
@@ -241,7 +247,7 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
       <div className={box}>
         <p className="text-xs text-muted-foreground">地価（{String(p.use)}）</p>
         <p className="font-semibold">{String(p.location)}</p>
-        <p className="text-lg tabular-nums">{formatYenPerSqm(Number(p.price))}</p>
+        <UnitPrice perSqm={Number(p.price)} />
         <p className="text-muted-foreground tabular-nums">
           前年比{" "}
           {formatPercent(p.changeRate === null ? null : Number(p.changeRate), { signed: true })}
@@ -254,10 +260,20 @@ function SelectionCard({ selection, metric }: { selection: Selection | null; met
     <div className={box}>
       <p className="text-xs text-muted-foreground">駅ごとの取引相場（直近 4 四半期）</p>
       <p className="font-semibold">{String(p.name)}</p>
-      <p className="text-lg tabular-nums">{formatYenPerSqm(Number(p.unitPrice))}</p>
+      <UnitPrice perSqm={Number(p.unitPrice)} />
       <p className="text-muted-foreground">
         取引 {formatCount(Number(p.count), "件")}・㎡単価の中央値
       </p>
+    </div>
+  );
+}
+
+// ㎡単価と坪単価を並べて出す。不動産の広告や査定では坪単価で話すことが多いため。
+function UnitPrice({ perSqm }: { perSqm: number }) {
+  return (
+    <div className="flex flex-col tabular-nums">
+      <span className="text-lg">{formatYenPerSqm(perSqm)}</span>
+      <span className="text-muted-foreground">坪単価 {formatYenPerTsubo(perSqm)}</span>
     </div>
   );
 }

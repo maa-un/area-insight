@@ -19,6 +19,13 @@ export function formatYenPerSqm(value: number | null): string {
   return value === null ? NO_DATA : `${integer.format(value)}円/㎡`;
 }
 
+// 1 坪 = 400/121 ㎡（約 3.306 ㎡）。坪単価は ㎡単価に 400/121 を掛け、1 円未満を四捨五入する。
+export const SQM_PER_TSUBO = 400 / 121;
+
+export function formatYenPerTsubo(valuePerSqm: number | null): string {
+  return valuePerSqm === null ? NO_DATA : `${integer.format(valuePerSqm * SQM_PER_TSUBO)}円/坪`;
+}
+
 export function formatPercent(value: number | null, { signed = false } = {}): string {
   if (value === null) return NO_DATA;
   const sign = signed && value > 0 ? "+" : "";
