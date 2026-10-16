@@ -136,7 +136,10 @@ export function ComparePage() {
                     {areas.map((area) => (
                       <td
                         key={area.code}
-                        className={cn("px-4 py-3", area[key] === top && "font-semibold")}
+                        className={cn(
+                          "px-4 py-3",
+                          area[key] === top && "font-bold text-terracotta",
+                        )}
                       >
                         {formatMetric(key, area[key])}
                       </td>

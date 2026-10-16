@@ -1,11 +1,12 @@
-import { prefectureName } from "@area-insight/shared";
+import { type AreaMetrics, prefectureName } from "@area-insight/shared";
 import { ChevronRight, Columns3, ListOrdered, Map as MapIcon, Search } from "lucide-react";
 import { type ComponentType, useId, useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { Bar, Eyebrow } from "@/components/brand";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { dataset, METRICS, type MetricKey, rankableAreas, sortAreas } from "@/data";
 import { formatMetric } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { areaPath } from "@/routes";
 
 const entries: {
@@ -43,13 +44,16 @@ const highlights: { key: MetricKey; order: "asc" | "desc"; title: string }[] = [
 export function HomePage() {
   return (
     <div className="flex flex-col gap-14">
-      <section className="flex flex-col items-center gap-5 text-center">
-        <Badge variant="secondary">全国の市区町村を公的データで</Badge>
-        <h1 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl">
-          どの市区町村で探すか、公的データで比べる
+      <section className="flex flex-col gap-6 py-2 sm:py-6">
+        <Eyebrow>
+          全国 {dataset.areas.length.toLocaleString("ja-JP")} 市区町村を公的データで
+        </Eyebrow>
+        <h1 className="max-w-3xl text-4xl font-extrabold tracking-tight text-balance sm:text-5xl">
+          その土地、<span className="text-terracotta">高い</span>のか
+          <span className="text-terracotta">安い</span>のか。
         </h1>
-        <p className="max-w-2xl text-pretty text-muted-foreground">
-          取引価格・地価・空き家率・人口の推移を、市区町村ごとに見比べられます。物件を探す前のエリア選びにお使いください。
+        <p className="max-w-2xl text-pretty text-lg text-muted-foreground">
+          取引価格・地価・空き家率・人口の推移を、市区町村ごとに。物件を探す前の、エリア選びのための調査ツールです。
         </p>
         <AreaSearch />
       </section>
@@ -59,7 +63,9 @@ export function HomePage() {
           <a key={title} href={href} className="group rounded-xl focus-visible:outline-2">
             <Card className="h-full transition-colors group-hover:bg-muted/40">
               <CardHeader>
-                <Icon className="size-5 text-primary" aria-hidden />
+                <span className="inline-flex size-10 items-center justify-center rounded-full bg-terracotta/10 text-terracotta">
+                  <Icon className="size-5" aria-hidden />
+                </span>
                 <CardTitle className="mt-2 flex items-center gap-1">
                   {title}
                   <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
@@ -88,22 +94,13 @@ export function HomePage() {
                 <CardDescription>{METRICS[key].label}</CardDescription>
               </CardHeader>
               <CardContent>
-                <ol className="flex flex-col gap-2 text-sm">
-                  {sortAreas(rankableAreas(dataset.areas, key, false), key, order)
-                    .slice(0, 5)
-                    .map((area, i) => (
-                      <li key={area.code} className="flex items-center gap-3">
-                        <span className="w-4 text-muted-foreground tabular-nums">{i + 1}</span>
-                        <a href={areaPath(area.code)} className="flex-1 truncate hover:underline">
-                          {area.name}
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            {prefectureName(area.prefectureCode)}
-                          </span>
-                        </a>
-                        <span className="tabular-nums">{formatMetric(key, area[key])}</span>
-                      </li>
-                    ))}
-                </ol>
+                <TopList
+                  areas={sortAreas(rankableAreas(dataset.areas, key, false), key, order).slice(
+                    0,
+                    5,
+                  )}
+                  metric={key}
+                />
                 <a
                   href={`/rankings/?metric=${key}&order=${order}`}
                   className="mt-4 inline-block text-xs text-muted-foreground hover:text-foreground"
@@ -137,7 +134,7 @@ function AreaSearch() {
         aria-hidden
       />
       <Input
-        className="h-11 pl-9"
+        className="h-12 bg-card pl-10 text-base"
         placeholder="市区町村名で検索（例: 松本市）"
         aria-label="市区町村名で検索"
         aria-controls={listId}
@@ -175,5 +172,41 @@ function AreaSearch() {
         </ul>
       )}
     </div>
+  );
+}
+
+// 上位 5 つを、値の大きさが分かる横棒付きで並べる。1 位だけテラコッタ。
+function TopList({ areas, metric }: { areas: AreaMetrics[]; metric: MetricKey }) {
+  const max = Math.max(...areas.map((a) => Math.abs(a[metric] ?? 0)), 0);
+  return (
+    <ol className="flex flex-col gap-3 text-sm">
+      {areas.map((area, i) => (
+        <li key={area.code} className="flex flex-col gap-1">
+          <div className="flex items-center gap-3">
+            <span
+              className={cn(
+                "w-5 text-xs font-bold tabular-nums",
+                i === 0 ? "text-terracotta" : "text-muted-foreground",
+              )}
+            >
+              {i + 1}
+            </span>
+            <a href={areaPath(area.code)} className="flex-1 truncate font-medium hover:underline">
+              {area.name}
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                {prefectureName(area.prefectureCode)}
+              </span>
+            </a>
+            <span className="font-bold tabular-nums">{formatMetric(metric, area[metric])}</span>
+          </div>
+          <Bar
+            value={Math.abs(area[metric] ?? 0)}
+            max={max}
+            highlight={i === 0}
+            className="ml-8 w-auto"
+          />
+        </li>
+      ))}
+    </ol>
   );
 }
