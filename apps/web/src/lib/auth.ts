@@ -1,7 +1,7 @@
 import type { Clerk } from "@clerk/clerk-js";
 import { useSyncExternalStore } from "react";
 
-// Clerk（Google SSO）のログイン状態。閲覧だけの人の表示を遅くしないよう、Clerk 本体は
+// Clerk（PropFolio と共通のアプリ）のログイン状態。閲覧だけの人の表示を遅くしないよう、Clerk 本体は
 // 「ログインボタンが押されたとき」か「ログイン済みの目印の Cookie があるとき」だけ読み込む。
 
 export type AuthState =
