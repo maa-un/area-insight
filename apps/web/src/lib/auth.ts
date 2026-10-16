@@ -78,6 +78,12 @@ export async function openSignIn(): Promise<void> {
   clerk.openSignIn();
 }
 
+export async function signOut(): Promise<void> {
+  if (!publishableKey) return;
+  const clerk = await loadClerk(publishableKey);
+  await clerk.signOut();
+}
+
 export async function mountUserButton(node: HTMLDivElement): Promise<() => void> {
   if (!publishableKey) return () => {};
   const clerk = await loadClerk(publishableKey);
