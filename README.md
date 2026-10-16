@@ -38,20 +38,25 @@ docker build -f apps/batch/Dockerfile -t area-insight-batch:local .
 
 ## リリースとデプロイ
 
-| 対象 | 契機 | 処理 |
+| 契機 | ワークフロー | 処理 |
 |---|---|---|
-| 全体 | PR / `main` への push | `ci.yml`: lint・型チェック・テスト・ビルド、イメージのビルド確認 |
-| バッチ・保存 API | `vX.Y.Z` タグの push | `release.yml`: イメージを Artifact Registry へ push |
-| 画面 | `main` への push（`apps/web` 等の変更）、手動、データ更新の通知 | `deploy-web.yml`: ビルドしてサイト用バケットへ配置し、CDN キャッシュを消す |
+| PR | `ci.yml` | lint・型チェック・テスト・ビルド、イメージのビルド確認 |
+| `main` へのマージ、手動 | `deploy.yml` | `ci.yml` を通してから、画面のデプロイと、版が上がっていればバッチ・保存 API のリリース |
+| データ更新の通知（`repository_dispatch: data-updated`） | `deploy.yml` | 画面だけを作り直す |
+
+`deploy.yml` の中身:
+
+- **画面**: ビルドしてサイト用バケットへ配置し、CDN キャッシュを消す（マージのたびに行う）
+- **バッチ・保存 API**: ルートの `package.json` の `version` に対応するタグ（`vX.Y.Z`）がまだ無ければ、
+  イメージを Artifact Registry へ push し、タグと GitHub Release を作る。タグが既にあれば何もしない
 
 バッチと保存 API の**稼働バージョンは maaun-terraform の tfvars で指定する。**
 イメージを push しただけでは切り替わらない。
 
 リリース手順:
 
-1. ルートの `package.json` の `version` を上げる PR を作ってマージする
-2. `main` で同じバージョンのタグを作って push する（例: `git tag v0.2.0 && git push origin v0.2.0`）
-3. maaun-terraform で使うタグを変える PR を作り、plan して apply する
+1. ルートの `package.json` の `version` を上げる（機能の PR に含めてよい）。マージするとイメージの push とタグ付けまで自動で行う
+2. maaun-terraform で使うタグを変える PR を作り、plan して apply する
 
 GitHub Actions は Workload Identity 連携で GCP に入る（鍵ファイルは持たない）。
 使う値はリポジトリの Actions variables に登録している。
@@ -69,7 +74,7 @@ gc.maa-un.com は Clerk に登録したドメイン maa-un.com のサブドメ�
 2. **保存 API**: maaun-terraform の `envs/dev/gcp/app/terraform.tfvars` で `clerk_issuer` を
    `https://clerk.maa-un.com` に変えて `make apply CLOUD=gcp LAYER=app` する（CSP の許可先も同じ値から作られる）
 3. **画面**: GitHub の Variables の `CLERK_PUBLISHABLE_KEY` を Prop Folio の公開キー（`pk_live_...`）に変え、
-   `deploy-web.yml` を再実行する
+   `deploy.yml` を手動で実行する
 4. **確認**: `https://gc.maa-un.com` で Google ログイン → お気に入りの保存 → 再読み込みで残ることを確かめる。
    PropFolio でログイン済みのブラウザで開くと、最初からログイン済みになることも確かめる
 

@@ -1,12 +1,13 @@
 name: ci
 
+# PR ごとに検査する。main へのマージ後は deploy.yml がこのワークフローを呼び、通ってからデプロイする。
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # 呼び出されたときは github.event が呼び出し元（push など）になるため、run_id で別のグループにする
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 permissions:
@@ -32,7 +33,7 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
-  # Dockerfile が壊れていないかだけを確かめる。イメージの push は release.yml で行う。
+  # Dockerfile が壊れていないかだけを確かめる。イメージの push は deploy.yml で行う。
   image:
     name: image (${{ matrix.app }})
     runs-on: ubuntu-latest
