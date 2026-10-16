@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type {
   MunicipalityRecord,
   PointRecord,
+  ProjectionRecord,
+  ProjectionSource,
   PublicDataSource,
   RawDataStore,
   StationRecord,
@@ -15,6 +17,7 @@ import type {
 import type { Quarter } from "../quarters.js";
 import { fetchMunicipalities } from "./municipalities.js";
 import { fetchLandPrices, fetchStations, fetchStationTransactions } from "./points.js";
+import { fetchProjections } from "./projections.js";
 import { fetchStatistics } from "./statistics.js";
 import { fetchTransactions } from "./transactions.js";
 
@@ -74,7 +77,25 @@ class FakeStatistics implements StatisticsSource {
   }
 }
 
+class FakeProjections implements ProjectionSource {
+  async projections(prefectureCode: string): Promise<ProjectionRecord[]> {
+    return prefectureCode === "20"
+      ? [
+          {
+            code: "20202",
+            name: "松本市",
+            sex: "男女計",
+            ageGroup: "総数",
+            year: 2050,
+            population: 1,
+          },
+        ]
+      : [];
+  }
+}
+
 class FakeStore implements RawDataStore {
+  projections: unknown[] = [];
   municipalities: unknown[] = [];
   readonly transactions = new Map<string, unknown[]>();
   readonly landPrices = new Map<number, unknown[]>();
@@ -96,6 +117,10 @@ class FakeStore implements RawDataStore {
 
   async replaceStatistics(rows: readonly unknown[]): Promise<void> {
     this.statistics = [...rows];
+  }
+
+  async replaceProjections(rows: readonly unknown[]): Promise<void> {
+    this.projections = [...rows];
   }
 
   async replaceMunicipalities(rows: readonly unknown[]): Promise<void> {
@@ -175,6 +200,14 @@ describe("fetchStations", () => {
     expect(await fetchStations(source, new FakeTiles(), store, now)).toBe(1);
     expect(source.calls).toEqual(["stations:11/1/1", "stations:11/2/1"]);
     expect(store.stationLines).toHaveLength(1);
+  });
+});
+
+describe("fetchProjections", () => {
+  it("collects every prefecture and replaces the whole table", async () => {
+    const store = new FakeStore();
+    expect(await fetchProjections(new FakeProjections(), store, now)).toBe(1);
+    expect(store.projections).toHaveLength(1);
   });
 });
 

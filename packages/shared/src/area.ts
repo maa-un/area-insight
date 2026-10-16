@@ -32,6 +32,9 @@ export const AreaMetrics = z.object({
   population: z.number().int().nonnegative().nullable(),
   // 過去 5 年の人口増減率（%）
   populationChangeRate: z.number().nullable(),
+  // 将来推計人口（社人研）。2050 年の推計と、2020 年（国勢調査）からの増減率（%）
+  projectedPopulation2050: z.number().int().nonnegative().nullable(),
+  projectedChangeRate: z.number().nullable(),
   // 想定表面利回り（%）。物件ごとではなくエリアの目安
   grossYield: z.number().nonnegative().nullable(),
   // 家賃相場（円/月）。PropFolio へ渡す
@@ -69,6 +72,7 @@ export type AreaMetrics = z.infer<typeof AreaMetrics>;
 //   housing_survey: 住宅・土地統計調査（空き家率・家賃。5 年ごと、10 月 1 日時点）
 //   resident_register: 住民基本台帳人口（1 月 1 日時点）
 //   official_land_price: 地価公示（1 月 1 日時点）  prefecture_land_price: 都道府県地価調査（基準地価、7 月 1 日時点）
+//   ipss_projection: 社人研「日本の地域別将来推計人口」（asOf は推計の年。2020 年国勢調査を基に 2050 年まで）
 export const DataSourceKey = z.enum([
   "XIT001",
   "XPT001",
@@ -76,6 +80,7 @@ export const DataSourceKey = z.enum([
   "resident_register",
   "official_land_price",
   "prefecture_land_price",
+  "ipss_projection",
 ]);
 export type DataSourceKey = z.infer<typeof DataSourceKey>;
 
@@ -98,6 +103,7 @@ export const DataSources = z.object({
   officialLandPrice: DataPeriod, // 地価公示の最新年。取り込む前は asOf が null
   prefectureLandPrice: DataPeriod, // 地価調査の最新年。取り込む前は asOf が null
   stationLandTrade: DataPeriod, // 駅ごとの土地の坪単価（直近 8 四半期）
+  populationProjection: DataPeriod, // 将来推計人口。取り込む前は asOf が null
 });
 export type DataSources = z.infer<typeof DataSources>;
 
@@ -183,6 +189,10 @@ export const AreaDetail = z.object({
   ),
   // 年ごとの人口（古い順）
   populationHistory: z.array(
+    z.object({ year: z.number().int(), population: z.number().int().nonnegative() }),
+  ),
+  // 将来推計人口（社人研、5 年ごと、古い順）。先頭の 2020 年は国勢調査の実績
+  populationProjection: z.array(
     z.object({ year: z.number().int(), population: z.number().int().nonnegative() }),
   ),
   // 土地の取引単価。市区町村全体と、地区（大字・町名）ごと。期間は直近 8 四半期

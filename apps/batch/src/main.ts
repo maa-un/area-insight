@@ -4,6 +4,7 @@ import { BigQueryRawStore } from "./adapters/bigquery/bigquery-raw-store.js";
 import { BigQueryWriter } from "./adapters/bigquery/bigquery-writer.js";
 import { knownLandPricePoints } from "./adapters/bigquery/known-land-price-points.js";
 import { EStatClient } from "./adapters/estat/estat-client.js";
+import { IpssClient } from "./adapters/ipss/ipss-client.js";
 import { ReinfolibClient } from "./adapters/reinfolib/reinfolib-client.js";
 import { FileTileCatalog } from "./adapters/tiles/file-tile-catalog.js";
 import { KnownPointTileCatalog } from "./adapters/tiles/known-point-tile-catalog.js";
@@ -11,6 +12,7 @@ import { type Config, loadConfig, requireSecret } from "./config.js";
 import { aggregate } from "./jobs/aggregate.js";
 import { fetchMunicipalities } from "./jobs/municipalities.js";
 import { fetchLandPrices, fetchStations, fetchStationTransactions } from "./jobs/points.js";
+import { fetchProjections } from "./jobs/projections.js";
 import { fetchStatistics } from "./jobs/statistics.js";
 import { fetchTransactions } from "./jobs/transactions.js";
 import { parseQuarter, recentQuarters } from "./quarters.js";
@@ -26,11 +28,12 @@ import { parseQuarter, recentQuarters } from "./quarters.js";
 //                                      駅ごとの取引相場は直近 4 四半期、土地の坪単価は 8 四半期を使う
 //   stations                           駅の位置・駅名・路線名（年に 1 度の更新）を取り直す
 //   statistics                         e-Stat の統計（空き家・家賃・人口）を取り直す
+//   projections                        社人研の将来推計人口（2050 年まで）を取り直す（推計は約 5 年ごと）
 //   aggregate                          指標を作り直し、画面向けのファイルを書き出す
 const USAGE =
   "usage: main.js municipalities | transactions [--recent N | --quarter YYYYQn ...] | " +
   "land-prices [--year YYYY] [--all-tiles] | station-transactions [--recent N] | stations | " +
-  "statistics | aggregate";
+  "statistics | projections | aggregate";
 
 // 既定で取り直す四半期の数。取引価格は直近 4 四半期の指標に使う（それより前は取り込み済みのものを使う）。
 // 駅ごとの取引は全体を置き換えるため、土地の坪単価に使う 8 四半期分を毎回取る。
@@ -121,6 +124,10 @@ async function run(
         requestIntervalMs: config.REQUEST_INTERVAL_MS,
       });
       return { rows: await fetchStatistics(source, store, now) };
+    }
+    case "projections": {
+      const source = new IpssClient({ requestIntervalMs: config.REQUEST_INTERVAL_MS });
+      return { rows: await fetchProjections(source, store, now) };
     }
     case "aggregate": {
       const warehouse = new BigQueryMetricsWarehouse(

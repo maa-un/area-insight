@@ -1,6 +1,7 @@
 import type {
   MunicipalityRecord,
   PointRecord,
+  ProjectionRecord,
   RawDataStore,
   StationRecord,
   StatisticRecord,
@@ -8,12 +9,15 @@ import type {
   TransactionRecord,
 } from "../../ports.js";
 import { type Quarter, quarterStartDate } from "../../quarters.js";
+import { EDITION } from "../ipss/ipss-client.js";
 import type { BigQueryWriter } from "./bigquery-writer.js";
 import {
   landPriceRow,
   municipalityRow,
+  projectionRow,
   RAW_LAND_PRICES,
   RAW_MUNICIPALITIES,
+  RAW_POPULATION_PROJECTION,
   RAW_STATION_TRANSACTIONS,
   RAW_STATIONS,
   RAW_STATISTICS,
@@ -78,6 +82,13 @@ export class BigQueryRawStore implements RawDataStore {
     await this.writer.replace(
       RAW_STATIONS,
       rows.map((row) => stationRow(row, fetchedAt)),
+    );
+  }
+
+  async replaceProjections(rows: readonly ProjectionRecord[], fetchedAt: Date): Promise<void> {
+    await this.writer.replace(
+      RAW_POPULATION_PROJECTION,
+      rows.map((row) => projectionRow(EDITION, row, fetchedAt)),
     );
   }
 

@@ -41,6 +41,16 @@ export type StatisticsTable = {
   readonly filters: Readonly<Record<string, string>>; // cdCat01 など
 };
 
+// 将来推計人口 1 件（社人研「日本の地域別将来推計人口」）。表の 1 マス（性別 × 年齢階級 × 年）をそのまま持つ。
+export type ProjectionRecord = {
+  readonly code: string; // 市区町村コード（5 桁）。都道府県の合計は末尾が 000
+  readonly name: string;
+  readonly sex: string; // 男女計・男・女
+  readonly ageGroup: string; // 総数、0～4歳 …
+  readonly year: number;
+  readonly population: number | null;
+};
+
 // 不動産情報ライブラリ。データが無い範囲は空の配列を返し、それ以外の失敗は例外にする。
 export interface PublicDataSource {
   municipalities(prefectureCode: string): Promise<MunicipalityRecord[]>;
@@ -56,6 +66,11 @@ export interface PublicDataSource {
 // 政府統計（e-Stat）。
 export interface StatisticsSource {
   values(table: StatisticsTable): Promise<StatisticRecord[]>;
+}
+
+// 将来推計人口（社人研）。都道府県ごとの表から、その中の市区町村の値を返す。
+export interface ProjectionSource {
+  projections(prefectureCode: string): Promise<ProjectionRecord[]>;
 }
 
 // 取得するタイルの一覧。陸地を含むタイルだけに絞り、リクエスト数を抑える。
@@ -93,6 +108,8 @@ export interface RawDataStore {
     rows: readonly { table: StatisticsTable; record: StatisticRecord }[],
     fetchedAt: Date,
   ): Promise<void>;
+  // 将来推計人口は 1 つの推計をまとめて取り直し、全体を置き換える。
+  replaceProjections(rows: readonly ProjectionRecord[], fetchedAt: Date): Promise<void>;
 }
 
 // 集計の置き場（BigQuery）。生データから指標を作り直し、画面向けのファイルを書き出す。

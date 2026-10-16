@@ -12,6 +12,8 @@ const area = (code: string, tradeCount: number): AreaMetrics => ({
   vacancyRate: 10,
   population: 1000,
   populationChangeRate: 0,
+  projectedPopulation2050: null,
+  projectedChangeRate: null,
   grossYield: 5,
   monthlyRent: 50000,
   rentPerSqm: null,

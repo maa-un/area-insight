@@ -195,6 +195,12 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
                   ))}
                 </tbody>
               </table>
+              {detail.populationProjection.length > 0 && (
+                <PopulationProjection
+                  rows={detail.populationProjection}
+                  changeRate={area.projectedChangeRate}
+                />
+              )}
             </CardContent>
           </Card>
 
@@ -267,6 +273,39 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         </CardContent>
       </Card>
     </article>
+  );
+}
+
+// 将来推計人口（社人研）。2020 年は国勢調査の実績、以降は 5 年ごとの推計。2050 年の増減率を見出しに出す。
+function PopulationProjection({
+  rows,
+  changeRate,
+}: {
+  rows: AreaDetail["populationProjection"];
+  changeRate: number | null;
+}) {
+  return (
+    <div className="mt-4 flex flex-col gap-2 border-t pt-3">
+      <p className="text-sm">
+        将来推計 2050年 {formatCount(rows.at(-1)?.population ?? null, "人")}（2020年比{" "}
+        {formatPercent(changeRate, { signed: true })}）
+      </p>
+      <p className="text-xs text-muted-foreground">{metricPeriod("projectedChangeRate")}</p>
+      <table className="w-full text-xs text-muted-foreground">
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.year} className="border-b border-dashed last:border-0">
+              <th scope="row" className="py-1 text-left font-normal">
+                {row.year}年{row.year === 2020 ? "（実績）" : "（推計）"}
+              </th>
+              <td className="py-1 text-right tabular-nums">
+                {row.population.toLocaleString("ja-JP")}人
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

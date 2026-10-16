@@ -105,6 +105,12 @@ export const METRICS = {
     better: "high",
     group: "distortion",
   },
+  projectedChangeRate: {
+    label: "将来人口の増減率（2020→2050年）",
+    unit: "%",
+    better: "high",
+    group: "basic",
+  },
   momentumGap: {
     label: "地価の上昇に取引が追いつかない",
     unit: "pt",
@@ -142,6 +148,8 @@ export function metricPeriod(key: MetricKey): string {
       return formatPopulationChange(population);
     case "population":
       return formatDataPeriod(population);
+    case "projectedChangeRate":
+      return formatDataPeriod(dataset.sources.populationProjection);
     case "landUnitPrice":
       return formatDataPeriod(landTrade);
     case "landToOfficialRatio":

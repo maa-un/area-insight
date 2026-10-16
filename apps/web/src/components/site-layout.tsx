@@ -131,6 +131,7 @@ function SiteFooter() {
 //   国土数値情報（駅別乗降客数）: 不動産情報ライブラリの API（XKT015）から取得するため、同ライブラリの出典に含まれる。
 //     どのデータで駅名を付けたかが分かるよう、取引価格の作成の注記に添える
 //   国土数値情報（行政区域）: CC BY 4.0（PDL1.0 の追加記載例どおり、加工したことと作成者を示す）
+//   社人研（将来推計人口）: PDL1.0（出典を記載し、加工したことを示す）
 const link = "underline underline-offset-2 hover:text-cream-text";
 
 function Credits() {
@@ -168,6 +169,13 @@ function Credits() {
           国土数値情報（行政区域データ）
         </a>
         （国土交通省）をもとに合同会社Maa'un Japan 作成
+      </p>
+      <p>
+        将来の人口は「日本の地域別将来推計人口（令和5（2023）年推計）」（
+        <a className={link} href="https://www.ipss.go.jp/" target="_blank" rel="noopener">
+          国立社会保障・人口問題研究所
+        </a>
+        ）をもとに合同会社Maa'un Japan が加工しました。
       </p>
       <p>
         このサービスは、国土交通省の不動産情報ライブラリのAPI機能を使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません。

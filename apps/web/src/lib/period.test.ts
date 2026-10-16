@@ -20,6 +20,9 @@ describe("period", () => {
     expect(formatDataPeriod(survey)).toBe("2023年調査");
     expect(formatDataPeriod(register)).toBe("2024年1月1日時点");
     expect(formatDataPeriod({ source: "XIT001", period: null, asOf: null })).toBe("時点不明");
+    expect(formatDataPeriod({ source: "ipss_projection", period: null, asOf: "2023-01-01" })).toBe(
+      "2023年推計（2020年国勢調査基準）",
+    );
   });
 
   it("shows the two years a population change compares", () => {
