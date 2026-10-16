@@ -40,9 +40,9 @@ const DEFAULT_ROWS = 15;
 
 // 判定の色。土地の価格チェッカーと公示地価との比較で同じ色を使う。
 const TONE = {
-  low: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  mid: "border-border bg-muted/40 text-foreground",
-  high: "border-rose-200 bg-rose-50 text-rose-900",
+  low: "border-good/50 text-good",
+  mid: "border-border text-muted-foreground",
+  high: "border-bad/50 text-bad",
 } as const;
 
 const BAND_LABELS: Record<StationDistanceBand, string> = {
@@ -381,8 +381,8 @@ function Row({
         <td
           className={cn(
             "py-2 text-right",
-            ratio !== null && ratio < 0.95 && "text-emerald-700",
-            ratio !== null && ratio > 1.05 && "text-rose-700",
+            ratio !== null && ratio < 0.95 && "text-good",
+            ratio !== null && ratio > 1.05 && "text-bad",
           )}
         >
           {formatRatio(ratio)}

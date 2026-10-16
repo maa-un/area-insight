@@ -63,7 +63,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col gap-2">
             <Eyebrow>{prefecture}</Eyebrow>
-            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">{area.name}</h1>
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{area.name}</h1>
             <p className="text-muted-foreground">中古戸建・空き家の相場と、土地の高い・安い</p>
           </div>
           <AreaActions code={area.code} />
@@ -89,7 +89,7 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
             <Card key={key} className="gap-2 py-4">
               <CardHeader className="px-4">
                 <CardDescription>{METRICS[key].label}</CardDescription>
-                <CardTitle className="flex items-center gap-2 text-3xl font-extrabold tabular-nums">
+                <CardTitle className="flex items-center gap-2 text-3xl font-semibold tabular-nums">
                   {formatMetric(key, area[key])}
                   {key === "tradePrice" && reference && area.tradePrice !== null && (
                     <Badge variant="outline">参考値</Badge>
@@ -300,8 +300,8 @@ function YearTable({
                   row.change === null
                     ? "py-2 text-right text-muted-foreground"
                     : row.change >= 0
-                      ? "py-2 text-right text-emerald-700"
-                      : "py-2 text-right text-rose-700"
+                      ? "py-2 text-right text-good"
+                      : "py-2 text-right text-bad"
                 }
               >
                 {row.change === null ? "—" : formatPercent(row.change, { signed: true })}

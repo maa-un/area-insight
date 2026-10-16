@@ -3,16 +3,16 @@ import { cn } from "@/lib/utils";
 
 // maa'un のブランドの部品。note・Shorts の図解と同じ作法で、数字を形で見せる。
 
-// 小見出し。左に短いテラコッタの縦バー＋太字（Shorts のラベルと同じ）。
+// 小見出し。左に短い赤銅の縦線＋字間を広げた小さな文字（Shorts のラベルを落ち着かせたもの）。
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <p
       className={cn(
-        "flex items-center gap-2.5 text-sm font-bold tracking-tight text-foreground",
+        "flex items-center gap-2.5 text-xs font-medium tracking-[0.14em] text-muted-foreground",
         className,
       )}
     >
-      <span className="inline-block h-5 w-1 shrink-0 rounded-full bg-terracotta" aria-hidden />
+      <span className="inline-block h-4 w-px shrink-0 bg-terracotta" aria-hidden />
       {children}
     </p>
   );
@@ -61,7 +61,7 @@ export function PositionBar({
   );
 }
 
-// 判定のタグ。良い・ふつう・注意の 3 色。
+// 判定のタグ。良い・ふつう・注意の 3 色。塗らずに細い線と文字色だけで示す。
 export function Chip({
   tone = "neutral",
   children,
@@ -70,14 +70,14 @@ export function Chip({
   children: ReactNode;
 }) {
   const tones = {
-    good: "border-good/30 bg-good/10 text-good",
-    neutral: "border-border bg-muted text-foreground",
-    bad: "border-bad/30 bg-bad/10 text-bad",
+    good: "border-good/50 text-good",
+    neutral: "border-border text-muted-foreground",
+    bad: "border-bad/50 text-bad",
   };
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold",
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium tracking-wide",
         tones[tone],
       )}
     >

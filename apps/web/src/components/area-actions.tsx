@@ -34,7 +34,7 @@ export function AreaActions({ code, compact = false }: { code: string; compact?:
             disabled={auth.status === "loading"}
             onClick={() => toggleFavorite(code)}
           >
-            <Heart className={favorite ? "fill-current text-rose-500" : undefined} />
+            <Heart className={favorite ? "fill-current text-bad" : undefined} />
             {favorite ? "お気に入り" : "お気に入りに追加"}
           </Button>
         )}

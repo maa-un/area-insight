@@ -46,7 +46,7 @@ function SiteHeader({ page }: { page: PageName }) {
       <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-2 px-4 sm:gap-4">
         <a
           href="/"
-          className="flex shrink-0 items-center gap-2 font-extrabold tracking-tight whitespace-nowrap"
+          className="flex shrink-0 items-center gap-2 font-heading font-semibold tracking-wide whitespace-nowrap"
         >
           <MapPin className="size-5 text-primary" aria-hidden />
           area-insight
