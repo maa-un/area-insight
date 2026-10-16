@@ -2,6 +2,7 @@ import type {
   MunicipalityRecord,
   PointRecord,
   RawDataStore,
+  StationRecord,
   StatisticRecord,
   StatisticsTable,
   TransactionRecord,
@@ -14,8 +15,10 @@ import {
   RAW_LAND_PRICES,
   RAW_MUNICIPALITIES,
   RAW_STATION_TRANSACTIONS,
+  RAW_STATIONS,
   RAW_STATISTICS,
   RAW_TRANSACTIONS,
+  stationRow,
   stationTransactionRow,
   statisticRow,
   transactionRow,
@@ -68,6 +71,13 @@ export class BigQueryRawStore implements RawDataStore {
     await this.writer.replace(
       RAW_STATION_TRANSACTIONS,
       rows.map((row) => stationTransactionRow(row, period.from, period.to, fetchedAt)),
+    );
+  }
+
+  async replaceStations(rows: readonly StationRecord[], fetchedAt: Date): Promise<void> {
+    await this.writer.replace(
+      RAW_STATIONS,
+      rows.map((row) => stationRow(row, fetchedAt)),
     );
   }
 

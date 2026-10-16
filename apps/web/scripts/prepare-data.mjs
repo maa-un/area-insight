@@ -84,6 +84,8 @@ export function convert(
       location: row.location ?? "",
     })),
     stations: latestRows(station_metrics).map((row) => ({
+      stationName: row.station_name ?? null,
+      lineNames: row.line_names ?? [],
       cityName: row.city_name ?? null,
       coordinates: [Number(row.longitude), Number(row.latitude)],
       medianPrice: num(row.median_price),

@@ -110,4 +110,39 @@ describe("ReinfolibClient", () => {
     expect(url.searchParams.get("from")).toBe("20261");
     expect(url.searchParams.get("landTypeCode")).toBe("02");
   });
+
+  it("reads stations as lines and keeps their geometry and properties", async () => {
+    const geometry = {
+      type: "LineString",
+      coordinates: [
+        [139.7, 35.69],
+        [139.701, 35.691],
+      ],
+    };
+    const fetchFn = vi.fn(async () =>
+      Response.json({
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry,
+            properties: { S12_001_ja: "新宿三丁目", S12_001g: "003689" },
+          },
+        ],
+      }),
+    );
+    const stations = await client(fetchFn as typeof fetch).stations({ z: 11, x: 1818, y: 806 });
+
+    expect(stations).toEqual([
+      { geometry, properties: { S12_001_ja: "新宿三丁目", S12_001g: "003689" } },
+    ]);
+    const url = new URL((fetchFn.mock.calls as unknown as [string][])[0]?.[0] ?? "");
+    expect(url.pathname).toMatch(/XKT015$/);
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      response_format: "geojson",
+      z: "11",
+      x: "1818",
+      y: "806",
+    });
+  });
 });

@@ -8,7 +8,7 @@ import { FileTileCatalog } from "./adapters/tiles/file-tile-catalog.js";
 import { type Config, loadConfig, requireSecret } from "./config.js";
 import { aggregate } from "./jobs/aggregate.js";
 import { fetchMunicipalities } from "./jobs/municipalities.js";
-import { fetchLandPrices, fetchStationTransactions } from "./jobs/points.js";
+import { fetchLandPrices, fetchStations, fetchStationTransactions } from "./jobs/points.js";
 import { fetchStatistics } from "./jobs/statistics.js";
 import { fetchTransactions } from "./jobs/transactions.js";
 import { parseQuarter, recentQuarters } from "./quarters.js";
@@ -19,11 +19,12 @@ import { parseQuarter, recentQuarters } from "./quarters.js";
 //   transactions --quarter 2025Q2 ...  指定した四半期を取り直す（初回取り込み・再取得用）
 //   land-prices [--year YYYY]          地価公示・地価調査の地点を取り直す（既定は今年）
 //   station-transactions [--recent N]  直近 N 四半期（既定 4）の駅ごとの取引を取り直す
+//   stations                           駅の位置・駅名・路線名（年に 1 度の更新）を取り直す
 //   statistics                         e-Stat の統計（空き家・家賃・人口）を取り直す
 //   aggregate                          指標を作り直し、画面向けのファイルを書き出す
 const USAGE =
   "usage: main.js municipalities | transactions [--recent N | --quarter YYYYQn ...] | " +
-  "land-prices [--year YYYY] | station-transactions [--recent N] | statistics | aggregate";
+  "land-prices [--year YYYY] | station-transactions [--recent N] | stations | statistics | aggregate";
 
 // タイル一覧はイメージの tiles/ に同梱する（dist/main.js から見て ../tiles/）。
 const TILES_DIR = new URL("../tiles/", import.meta.url);
@@ -91,6 +92,10 @@ async function run(
       if (!to || !from) throw new Error("--recent must be at least 1");
       const tiles = new FileTileCatalog(TILES_DIR);
       return { rows: await fetchStationTransactions(reinfolib(), tiles, store, { from, to }, now) };
+    }
+    case "stations": {
+      const tiles = new FileTileCatalog(TILES_DIR);
+      return { rows: await fetchStations(reinfolib(), tiles, store, now) };
     }
     case "statistics": {
       const source = new EStatClient({

@@ -86,6 +86,8 @@ const exportRows = {
     {
       export_id: "2026-10-16T00:00:00.000Z",
       city_name: "松本市",
+      station_name: "松本",
+      line_names: ["大糸線", "篠ノ井線"],
       longitude: 137.97,
       latitude: 36.23,
       median_price: "2000",
@@ -116,7 +118,11 @@ describe("prepare-data", () => {
 
     expect(AreaDetail.parse(data.details[0]).recentTransactions[0]?.buildingYear).toBe(1998);
     expect(LandPricePoints.parse(data.landPrices)[0]?.price).toBe(75200);
-    expect(StationMetricsList.parse(data.stations)[0]?.medianPrice).toBe(2000);
+    expect(StationMetricsList.parse(data.stations)[0]).toMatchObject({
+      stationName: "松本",
+      lineNames: ["大糸線", "篠ノ井線"],
+      medianPrice: 2000,
+    });
   });
 
   it("uses the boundary centers, keeping the job's center only for areas without a boundary", () => {

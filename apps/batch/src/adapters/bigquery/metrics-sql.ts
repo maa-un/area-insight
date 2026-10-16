@@ -8,6 +8,8 @@ const RECENT_MONTHS = 12;
 const HISTORY_MONTHS = 60;
 // 人口の増減率を何年前と比べるか。
 const POPULATION_YEARS = 5;
+// 駅ごとの取引の点に駅名を付けるとき、駅の線から何 m 以内を同じ駅とみなすか。
+const STATION_MATCH_METERS = 300;
 // 市区町村ページに出す直近の取引の件数。
 const RECENT_TRANSACTIONS = 8;
 
@@ -197,20 +199,53 @@ export function metricsSql(dataset: string): MetricsSql {
     WHERE target_year_start = (SELECT MAX(target_year_start) FROM ${t("raw_land_prices")})
       AND ${leadingNumber("JSON_VALUE(properties, '$.u_current_years_price_ja')")} IS NOT NULL`;
 
-  // 駅ごとの取引相場。XPT001 は駅名を返さず、「土地と建物」の㎡単価も空のため、
-  // 同じ駅（同じ位置）に集まる取引の総額の中央値と件数を出す。
+  // 駅ごとの取引相場。XPT001 は「土地と建物」の㎡単価が空のため、同じ駅（同じ位置）に集まる取引の
+  // 総額の中央値と件数を出す。XPT001 は駅名を返さないため、駅（XKT015）の線のうち最も近いものの駅名を付け、
+  // 同じグループコード（同じ名前の駅を運営会社をまたいでまとめたもの）の路線名を並べる。
+  // 2026-10 に新宿付近の 1 タイルで確かめたところ、点から最寄りの駅の線までは中央値 6m・最大 117m だった。
   const stationMetrics = `
     CREATE OR REPLACE TABLE ${t("station_metrics")} AS
+    WITH points AS (
+      SELECT
+        ANY_VALUE(SUBSTR(JSON_VALUE(properties, '$.city_code'), 1, 2)) AS prefecture_code,
+        ANY_VALUE(JSON_VALUE(properties, '$.city_name_ja')) AS city_name,
+        longitude, latitude,
+        APPROX_QUANTILES(${manYen("JSON_VALUE(properties, '$.u_transaction_price_total_ja')")}, 100)[SAFE_OFFSET(50)] AS median_price,
+        COUNT(*) AS count
+      FROM ${t("raw_station_transactions")}
+      WHERE JSON_VALUE(properties, '$.land_type_name_ja') = '${HOUSE_TYPE}'
+      GROUP BY longitude, latitude
+      HAVING median_price IS NOT NULL
+    ),
+    stations AS (
+      SELECT
+        JSON_VALUE(properties, '$.S12_001g') AS group_code,
+        JSON_VALUE(properties, '$.S12_001_ja') AS station_name,
+        JSON_VALUE(properties, '$.S12_003_ja') AS line_name,
+        SAFE.ST_GEOGFROMGEOJSON(TO_JSON_STRING(geometry)) AS geography
+      FROM ${t("raw_stations")}
+    ),
+    nearest AS (
+      SELECT
+        p.longitude, p.latitude,
+        ARRAY_AGG(STRUCT(s.group_code, s.station_name)
+          ORDER BY ST_DISTANCE(ST_GEOGPOINT(p.longitude, p.latitude), s.geography) LIMIT 1)[OFFSET(0)] AS station
+      FROM points AS p
+      JOIN stations AS s
+        ON ST_DWITHIN(ST_GEOGPOINT(p.longitude, p.latitude), s.geography, ${STATION_MATCH_METERS})
+      GROUP BY p.longitude, p.latitude
+    ),
+    lines AS (
+      SELECT group_code, ARRAY_AGG(DISTINCT line_name IGNORE NULLS ORDER BY line_name) AS line_names
+      FROM stations GROUP BY group_code
+    )
     SELECT
-      ANY_VALUE(SUBSTR(JSON_VALUE(properties, '$.city_code'), 1, 2)) AS prefecture_code,
-      ANY_VALUE(JSON_VALUE(properties, '$.city_name_ja')) AS city_name,
-      longitude, latitude,
-      APPROX_QUANTILES(${manYen("JSON_VALUE(properties, '$.u_transaction_price_total_ja')")}, 100)[SAFE_OFFSET(50)] AS median_price,
-      COUNT(*) AS count
-    FROM ${t("raw_station_transactions")}
-    WHERE JSON_VALUE(properties, '$.land_type_name_ja') = '${HOUSE_TYPE}'
-    GROUP BY longitude, latitude
-    HAVING median_price IS NOT NULL`;
+      points.*,
+      nearest.station.station_name,
+      IFNULL(lines.line_names, []) AS line_names
+    FROM points
+    LEFT JOIN nearest USING (longitude, latitude)
+    LEFT JOIN lines ON lines.group_code = nearest.station.group_code`;
 
   return {
     rebuild: [areaMetrics, areaDetails, landPricePoints, stationMetrics],
