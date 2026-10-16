@@ -1,10 +1,11 @@
 import { parseArgs } from "node:util";
-import { BigQueryWriter } from "./bigquery.js";
+import { BigQueryRawStore } from "./adapters/bigquery/bigquery-raw-store.js";
+import { BigQueryWriter } from "./adapters/bigquery/bigquery-writer.js";
+import { ReinfolibClient } from "./adapters/reinfolib/reinfolib-client.js";
 import { loadConfig } from "./config.js";
 import { fetchMunicipalities } from "./jobs/municipalities.js";
 import { fetchTransactions } from "./jobs/transactions.js";
 import { parseQuarter, recentQuarters } from "./quarters.js";
-import { ReinfolibClient } from "./reinfolib.js";
 
 // Cloud Run Jobs から `node dist/main.js <command>` で起動する。
 //   municipalities                     市区町村マスタを取り直す
@@ -23,16 +24,19 @@ async function main(argv: string[]): Promise<void> {
   });
 
   const config = loadConfig();
-  const client = new ReinfolibClient({
+  // 組み立て（コンポジションルート）。取得元と保存先の実装を決めるのはここだけにする。
+  const source = new ReinfolibClient({
     apiKey: config.REINFOLIB_API_KEY,
     requestIntervalMs: config.REQUEST_INTERVAL_MS,
   });
-  const writer = new BigQueryWriter(config.GCP_PROJECT_ID, config.BIGQUERY_DATASET);
+  const store = new BigQueryRawStore(
+    new BigQueryWriter(config.GCP_PROJECT_ID, config.BIGQUERY_DATASET),
+  );
   const now = new Date();
 
   switch (positionals[0]) {
     case "municipalities": {
-      const count = await fetchMunicipalities(client, writer, now);
+      const count = await fetchMunicipalities(source, store, now);
       console.log(JSON.stringify({ job: "municipalities", rows: count }));
       return;
     }
@@ -40,7 +44,7 @@ async function main(argv: string[]): Promise<void> {
       const quarters = values.quarter?.length
         ? values.quarter.map(parseQuarter)
         : recentQuarters(now, Number(values.recent));
-      const counts = await fetchTransactions(client, writer, quarters, now);
+      const counts = await fetchTransactions(source, store, quarters, now);
       console.log(JSON.stringify({ job: "transactions", rows: Object.fromEntries(counts) }));
       return;
     }

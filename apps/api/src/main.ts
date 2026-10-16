@@ -1,18 +1,20 @@
 import { createServer } from "node:http";
 import { Firestore } from "@google-cloud/firestore";
-import { clerkTokenVerifier } from "./auth.js";
+import { ClerkTokenVerifier } from "./adapters/clerk/token-verifier.js";
+import { ClerkWebhook } from "./adapters/clerk/webhook.js";
+import { FirestorePreferencesRepository } from "./adapters/firestore/firestore-preferences-repository.js";
+import { createHandler } from "./adapters/http/server.js";
+import { PreferencesService } from "./application/preferences-service.js";
 import { loadConfig } from "./config.js";
-import { createHandler } from "./server.js";
-import { FirestoreUserStore } from "./store.js";
-import { verifyClerkWebhook } from "./webhook.js";
 
+// 組み立て（コンポジションルート）。どの実装を使うかを決めるのはここだけにする。
 const config = loadConfig();
 
 const handler = createHandler({
-  verifyToken: clerkTokenVerifier(config.CLERK_ISSUER, config.CLERK_AUTHORIZED_PARTIES),
-  verifyWebhook: (headers, body) => verifyClerkWebhook(config.CLERK_WEBHOOK_SECRET, headers, body),
+  tokens: new ClerkTokenVerifier(config.CLERK_ISSUER, config.CLERK_AUTHORIZED_PARTIES),
+  webhook: new ClerkWebhook(config.CLERK_WEBHOOK_SECRET),
   // Cloud Run ではプロジェクトと認証情報を実行環境から自動で取得する。
-  store: new FirestoreUserStore(new Firestore()),
+  preferences: new PreferencesService(new FirestorePreferencesRepository(new Firestore())),
 });
 
 const server = createServer((req, res) => {

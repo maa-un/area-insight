@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { verifyClerkWebhook } from "./webhook.js";
+import { ClerkWebhook, verifyClerkWebhook } from "./webhook.js";
 
 const key = Buffer.from("test-signing-key-test-signing-key");
 const secret = `whsec_${key.toString("base64")}`;
@@ -41,5 +41,29 @@ describe("verifyClerkWebhook", () => {
 
   it("rejects missing headers", () => {
     expect(verifyClerkWebhook(secret, {}, body, now)).toBe(false);
+  });
+});
+
+describe("ClerkWebhook", () => {
+  const webhook = new ClerkWebhook(secret, () => now);
+  const receive = (body: string) =>
+    webhook.receive({ id: "msg_1", timestamp, signature: sign("msg_1", timestamp, body) }, body);
+
+  it("turns user.deleted into an account-deleted event", () => {
+    const body = JSON.stringify({ type: "user.deleted", data: { id: "user_1" } });
+    expect(receive(body)).toEqual({
+      ok: true,
+      event: { type: "account-deleted", userId: "user_1" },
+    });
+  });
+
+  it("ignores other event types", () => {
+    const body = JSON.stringify({ type: "user.created", data: { id: "user_1" } });
+    expect(receive(body)).toEqual({ ok: true, event: { type: "ignored" } });
+  });
+
+  it("reports a bad signature and a malformed body separately", () => {
+    expect(webhook.receive({}, "{}")).toEqual({ ok: false, reason: "invalid-signature" });
+    expect(receive("not json")).toEqual({ ok: false, reason: "invalid-event" });
   });
 });

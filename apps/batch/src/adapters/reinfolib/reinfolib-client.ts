@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { MunicipalityRecord, PublicDataSource, TransactionRecord } from "../../ports.js";
+import type { Quarter } from "../../quarters.js";
 
 // 国土交通省 不動産情報ライブラリ API のクライアント。
 // https://www.reinfolib.mlit.go.jp/help/apiManual/
@@ -7,7 +9,8 @@ const BASE_URL = "https://www.reinfolib.mlit.go.jp/ex-api/external";
 const MunicipalityRow = z.looseObject({ id: z.string(), name: z.string() });
 
 // 取引価格（XIT001）の 1 件。値はすべて文字列で返るため、加工せずそのまま保存する。
-const TransactionRow = z.looseObject({
+// 知らない項目が増えても失敗しないよう、定義していない項目は取り除く（保存するのは定義した項目だけ）。
+const TransactionRow = z.object({
   Type: z.string().optional(),
   Region: z.string().optional(),
   MunicipalityCode: z.string().optional(),
@@ -38,7 +41,6 @@ const TransactionRow = z.looseObject({
   PriceCategory: z.string().optional(),
   DistrictCode: z.string().optional(),
 });
-export type TransactionRow = z.infer<typeof TransactionRow>;
 
 const Envelope = <T extends z.ZodType>(row: T) => z.looseObject({ data: z.array(row) });
 
@@ -50,7 +52,8 @@ export type ReinfolibClientOptions = {
   maxAttempts?: number;
 };
 
-export class ReinfolibClient {
+// 取得元（PublicDataSource）の実装。
+export class ReinfolibClient implements PublicDataSource {
   private readonly fetchFn: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly maxAttempts: number;
@@ -63,20 +66,19 @@ export class ReinfolibClient {
   }
 
   // XIT002: 都道府県内の市区町村一覧。
-  async municipalities(prefectureCode: string): Promise<{ id: string; name: string }[]> {
+  async municipalities(prefectureCode: string): Promise<MunicipalityRecord[]> {
     const body = await this.get("XIT002", { area: prefectureCode });
-    return body === null ? [] : Envelope(MunicipalityRow).parse(body).data;
+    if (body === null) return [];
+    return Envelope(MunicipalityRow)
+      .parse(body)
+      .data.map((row) => ({ code: row.id, name: row.name }));
   }
 
   // XIT001: 都道府県・四半期を指定した取引価格（成約価格は含めない）。
-  async transactions(
-    prefectureCode: string,
-    year: number,
-    quarter: number,
-  ): Promise<TransactionRow[]> {
+  async transactions(prefectureCode: string, quarter: Quarter): Promise<TransactionRecord[]> {
     const body = await this.get("XIT001", {
-      year: String(year),
-      quarter: String(quarter),
+      year: String(quarter.year),
+      quarter: String(quarter.quarter),
       area: prefectureCode,
       priceClassification: "01",
     });
