@@ -1,21 +1,30 @@
-import { LogIn } from "lucide-react";
+import { LogIn, LogOut } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { mountUserButton, openSignIn, useAuth } from "@/lib/auth";
+import { mountUserButton, openSignIn, signOut, useAuth } from "@/lib/auth";
 
 // ヘッダー右上のログイン表示。公開キーが無い環境では何も出さない。
 export function AuthMenu() {
   const auth = useAuth();
 
   if (auth.status === "disabled") return null;
-  if (auth.status === "signed-in") return <UserButton />;
+  // 読み込み中はログイン済みかどうか分からないので、ボタンを出さずに場所だけ確保する。
+  // ログイン済みの人にログインボタンが一瞬見えるのを防ぐ。
+  if (auth.status === "loading") return <div aria-hidden className="h-8 w-28" />;
+  if (auth.status === "signed-in") {
+    return (
+      <div className="flex items-center gap-2">
+        <UserButton />
+        {/* 幅の狭い画面ではアイコンだけにする */}
+        <Button size="sm" variant="ghost" aria-label="ログアウト" onClick={() => void signOut()}>
+          <LogOut />
+          <span className="hidden sm:inline">ログアウト</span>
+        </Button>
+      </div>
+    );
+  }
   return (
-    <Button
-      size="sm"
-      variant="outline"
-      disabled={auth.status === "loading"}
-      onClick={() => void openSignIn()}
-    >
+    <Button size="sm" variant="outline" onClick={() => void openSignIn()}>
       <LogIn />
       Google でログイン
     </Button>
