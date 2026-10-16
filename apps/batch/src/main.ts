@@ -1,10 +1,12 @@
 import { parseArgs } from "node:util";
+import { BigQueryMetricsWarehouse } from "./adapters/bigquery/bigquery-metrics-warehouse.js";
 import { BigQueryRawStore } from "./adapters/bigquery/bigquery-raw-store.js";
 import { BigQueryWriter } from "./adapters/bigquery/bigquery-writer.js";
 import { EStatClient } from "./adapters/estat/estat-client.js";
 import { ReinfolibClient } from "./adapters/reinfolib/reinfolib-client.js";
 import { FileTileCatalog } from "./adapters/tiles/file-tile-catalog.js";
 import { type Config, loadConfig, requireSecret } from "./config.js";
+import { aggregate } from "./jobs/aggregate.js";
 import { fetchMunicipalities } from "./jobs/municipalities.js";
 import { fetchLandPrices, fetchStationTransactions } from "./jobs/points.js";
 import { fetchStatistics } from "./jobs/statistics.js";
@@ -18,9 +20,10 @@ import { parseQuarter, recentQuarters } from "./quarters.js";
 //   land-prices [--year YYYY]          地価公示・地価調査の地点を取り直す（既定は今年）
 //   station-transactions [--recent N]  直近 N 四半期（既定 4）の駅ごとの取引を取り直す
 //   statistics                         e-Stat の統計（空き家・家賃・人口）を取り直す
+//   aggregate                          指標を作り直し、画面向けのファイルを書き出す
 const USAGE =
   "usage: main.js municipalities | transactions [--recent N | --quarter YYYYQn ...] | " +
-  "land-prices [--year YYYY] | station-transactions [--recent N] | statistics";
+  "land-prices [--year YYYY] | station-transactions [--recent N] | statistics | aggregate";
 
 // タイル一覧はイメージの tiles/ に同梱する（dist/main.js から見て ../tiles/）。
 const TILES_DIR = new URL("../tiles/", import.meta.url);
@@ -95,6 +98,14 @@ async function run(
         requestIntervalMs: config.REQUEST_INTERVAL_MS,
       });
       return { rows: await fetchStatistics(source, store, now) };
+    }
+    case "aggregate": {
+      const warehouse = new BigQueryMetricsWarehouse(
+        config.GCP_PROJECT_ID,
+        config.BIGQUERY_DATASET,
+        requireSecret(config, "DATA_BUCKET"),
+      );
+      return { exportId: await aggregate(warehouse, now) };
     }
     default:
       throw new Error(USAGE);

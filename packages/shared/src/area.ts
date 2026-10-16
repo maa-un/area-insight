@@ -31,8 +31,8 @@ export const AreaMetrics = z.object({
   grossYield: z.number().nonnegative().nullable(),
   // 家賃相場（円/月）。PropFolio へ渡す
   monthlyRent: z.number().int().nonnegative().nullable(),
-  // 地図で市区町村を指す位置（代表点）
-  center: LngLat,
+  // 地図で市区町村を指す位置（代表点）。位置の分かるデータが無い市区町村は null（地図に出さない）
+  center: LngLat.nullable(),
 });
 export type AreaMetrics = z.infer<typeof AreaMetrics>;
 
@@ -91,11 +91,12 @@ export const LandPricePoint = z.object({
 });
 export type LandPricePoint = z.infer<typeof LandPricePoint>;
 
-// 駅ごとの取引相場（XPT001）。都道府県ごとのファイル。
+// 駅ごとの取引相場（XPT001）。位置は物件の最寄り駅。
+// API が駅名を返さず、「土地と建物」の㎡単価も空のため、取引総額の中央値と件数を持つ。
 export const StationMetrics = z.object({
-  name: z.string().min(1),
+  cityName: z.string().nullable(), // 駅のある市区町村（駅名の代わりに表示する）
   coordinates: LngLat,
-  unitPrice: z.number().nonnegative(), // ㎡単価の中央値（円/㎡）
+  medianPrice: z.number().nonnegative(), // 取引総額の中央値（万円）
   count: z.number().int().nonnegative(),
 });
 export type StationMetrics = z.infer<typeof StationMetrics>;

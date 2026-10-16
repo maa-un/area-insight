@@ -11,3 +11,6 @@ coverage/
 !.env.example
 
 .DS_Store
+
+# 集計ジョブの書き出しから作るデータ（scripts/prepare-data.mjs）
+apps/web/src/data/generated/

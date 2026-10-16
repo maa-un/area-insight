@@ -83,3 +83,10 @@ export interface RawDataStore {
     fetchedAt: Date,
   ): Promise<void>;
 }
+
+// 集計の置き場（BigQuery）。生データから指標を作り直し、画面向けのファイルを書き出す。
+export interface MetricsWarehouse {
+  rebuildMetrics(): Promise<void>;
+  // 今回の書き出しを見分ける印（exportId）を付けて書き出す。画面のビルドは最新の印の行だけを使う。
+  exportForWeb(exportId: string): Promise<void>;
+}
