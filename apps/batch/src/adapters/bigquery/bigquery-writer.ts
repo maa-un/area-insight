@@ -37,9 +37,11 @@ export class BigQueryWriter {
   }
 
   // partition を渡すとそのパーティション（YYYYMMDD）だけを置き換える。省略時はテーブル全体を置き換える。
+  // rows は一時ファイルへ 1 行ずつ書き足し、読み終えてから 1 回のロードジョブで置き換える。
+  // 読む途中で例外になったらロードしないため、取得が途中で失敗しても前回の内容が残る。
   async replace(
     spec: TableSpec,
-    rows: Record<string, unknown>[],
+    rows: Iterable<Record<string, unknown>> | AsyncIterable<Record<string, unknown>>,
     partition?: string,
   ): Promise<void> {
     await this.ensureTable(spec);
@@ -63,17 +65,20 @@ export class BigQueryWriter {
 }
 
 // 1 行ずつ書き出す。全行を 1 つの文字列にまとめると、取引価格（1 四半期で約 4 万行）でヒープが足りなくなる。
+// rows が AsyncIterable なら、取得しながら書き足せるため、全行を配列に溜めずに済む。
 export async function writeNdjson(
   file: string,
-  rows: Iterable<Record<string, unknown>>,
+  rows: Iterable<Record<string, unknown>> | AsyncIterable<Record<string, unknown>>,
 ): Promise<void> {
   const out = createWriteStream(file, { encoding: "utf8" });
   try {
-    for (const row of rows) {
+    for await (const row of rows) {
       if (!out.write(`${JSON.stringify(row)}\n`)) await once(out, "drain");
     }
-  } finally {
     out.end();
+    await once(out, "finish");
+  } catch (error) {
+    out.destroy();
+    throw error;
   }
-  await once(out, "finish");
 }

@@ -103,16 +103,16 @@ class FakeStore implements RawDataStore {
   stationLines: unknown[] = [];
   statistics: unknown[] = [];
 
-  async replaceLandPrices(year: number, rows: readonly unknown[]): Promise<void> {
-    this.landPrices.set(year, [...rows]);
+  async replaceLandPrices(year: number, rows: AsyncIterable<unknown>): Promise<void> {
+    this.landPrices.set(year, await collect(rows));
   }
 
-  async replaceStationTransactions(_period: unknown, rows: readonly unknown[]): Promise<void> {
-    this.stations = [...rows];
+  async replaceStationTransactions(_period: unknown, rows: AsyncIterable<unknown>): Promise<void> {
+    this.stations = await collect(rows);
   }
 
-  async replaceStations(rows: readonly unknown[]): Promise<void> {
-    this.stationLines = [...rows];
+  async replaceStations(rows: AsyncIterable<unknown>): Promise<void> {
+    this.stationLines = await collect(rows);
   }
 
   async replaceStatistics(rows: readonly unknown[]): Promise<void> {
@@ -130,6 +130,13 @@ class FakeStore implements RawDataStore {
   async replaceTransactions(quarter: Quarter, rows: readonly unknown[]): Promise<void> {
     this.transactions.set(`${quarter.year}Q${quarter.quarter}`, [...rows]);
   }
+}
+
+// 本物の保存先と同じく、最後まで読み終えてから置き換える。途中で例外になったら前の内容を残す。
+async function collect<T>(rows: AsyncIterable<T>): Promise<T[]> {
+  const all: T[] = [];
+  for await (const row of rows) all.push(row);
+  return all;
 }
 
 const now = new Date("2026-10-15T00:00:00Z");
@@ -189,6 +196,35 @@ describe("fetchStationTransactions", () => {
     expect(await fetchStationTransactions(source, new FakeTiles(), store, period, now)).toBe(2);
     expect(source.calls[0]).toBe("station:11/1/1:2025Q3-2026Q2");
     expect(store.stations).toHaveLength(2);
+  });
+
+  it("hands rows to the store one tile at a time instead of collecting them first", async () => {
+    const source = new FakeSource();
+    const seen: string[] = [];
+    const store = new FakeStore();
+    store.replaceStationTransactions = async (_period, rows) => {
+      for await (const _row of rows) seen.push(`row after ${source.calls.length} call(s)`);
+    };
+    const period = { from: { year: 2025, quarter: 3 }, to: { year: 2026, quarter: 2 } } as const;
+
+    expect(await fetchStationTransactions(source, new FakeTiles(), store, period, now)).toBe(2);
+    expect(seen).toEqual(["row after 1 call(s)", "row after 2 call(s)"]);
+  });
+
+  it("leaves the stored rows untouched when a tile fails midway", async () => {
+    const source = new FakeSource();
+    source.stationTransactions = async (tile) => {
+      if (tile.x === 2) throw new Error("API error");
+      return [{ coordinates: [139.7, 35.6], properties: {} }];
+    };
+    const store = new FakeStore();
+    store.stations = ["previous"];
+    const period = { from: { year: 2025, quarter: 3 }, to: { year: 2026, quarter: 2 } } as const;
+
+    await expect(
+      fetchStationTransactions(source, new FakeTiles(), store, period, now),
+    ).rejects.toThrow("API error");
+    expect(store.stations).toEqual(["previous"]);
   });
 });
 
