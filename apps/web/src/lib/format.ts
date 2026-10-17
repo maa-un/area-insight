@@ -33,6 +33,11 @@ export function formatManYenPerTsubo(valuePerSqm: number | null): string {
     : `${decimal.format((valuePerSqm * SQM_PER_TSUBO) / 10000)}万円/坪`;
 }
 
+// ㎡単価（万円/㎡、小数 1 桁）。
+export function formatManYenPerSqm(valuePerSqm: number | null): string {
+  return valuePerSqm === null ? NO_DATA : `${decimal.format(valuePerSqm / 10000)}万円/㎡`;
+}
+
 // 坪単価の幅（「45.2〜58.1万円/坪」）。
 export function formatTsuboRange(lowPerSqm: number, highPerSqm: number): string {
   const tsubo = (v: number) => decimal.format((v * SQM_PER_TSUBO) / 10000);
