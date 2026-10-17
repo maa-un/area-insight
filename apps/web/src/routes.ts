@@ -46,7 +46,7 @@ export function pathOf(route: Route): string | undefined {
   return `/${file.slice(0, -"index.html".length)}`;
 }
 
-const SITE = "area-insight";
+const SITE = "マチノメ";
 
 // ページごとの title と description（SEO）。noindex のページは検索に載せず、sitemap にも入れない。
 export function headOf(route: Route): { title: string; description: string; noindex?: true } {
