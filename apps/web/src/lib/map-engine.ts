@@ -5,6 +5,7 @@ import {
   type MapLayerMouseEvent,
   Map as MapLibreMap,
   NavigationControl,
+  Popup,
   setWorkerUrl,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -27,6 +28,9 @@ export type Feature = { coordinates: LngLat; properties: Record<string, string |
 
 export type Selection = { layer: LayerId; properties: Record<string, unknown> };
 
+// 吹き出しの中身。文字だけを受け取り、textContent で入れる（HTML として解釈しない）
+export type PopupContent = { title: string; lines: string[] };
+
 export type MapController = {
   // 境界の読み込みが終わると解決する。失敗すると reject する（地点の表示はそのまま使える）
   areasLoaded: Promise<void>;
@@ -37,6 +41,11 @@ export type MapController = {
   selectArea: (code: MunicipalityCode | null) => void;
   setVisible: (layer: LayerId, visible: boolean) => void;
   flyTo: (center: LngLat, zoom: number) => void;
+  // 吹き出しを開く（開いていれば置き換える）
+  showPopup: (at: LngLat, content: PopupContent) => void;
+  closePopup: () => void;
+  // 開いている吹き出しの中身だけを差し替える。閉じていれば何もしない
+  updatePopup: (content: PopupContent) => void;
   // 点の範囲に合わせて表示する（[西, 南, 東, 北]）
   fitBounds: (bounds: [number, number, number, number]) => void;
   destroy: () => void;
@@ -193,6 +202,9 @@ export function createMap(
         });
       }
 
+      // 吹き出しは 1 つだけ使い回す。地図の空いた所を押しても閉じない（閉じるのは × か closePopup）
+      const popup = new Popup({ closeOnClick: false, maxWidth: "16rem", offset: 12 });
+
       let colors: ReadonlyMap<MunicipalityCode, string> = new Map();
       let selected: MunicipalityCode | null = null;
       let loaded = false;
@@ -235,6 +247,16 @@ export function createMap(
           if (layer === "areas") map.setLayoutProperty("areas-outline", "visibility", value);
         },
         flyTo: (center, zoom) => map.flyTo({ center, zoom }),
+        showPopup: (at, content) => {
+          popup.setLngLat(at).setDOMContent(popupNode(content));
+          if (!popup.isOpen()) popup.addTo(map);
+        },
+        closePopup: () => {
+          popup.remove();
+        },
+        updatePopup: (content) => {
+          if (popup.isOpen()) popup.setDOMContent(popupNode(content));
+        },
         fitBounds: ([west, south, east, north]) =>
           map.fitBounds(
             [
@@ -247,6 +269,21 @@ export function createMap(
       });
     });
   });
+}
+
+function popupNode({ title, lines }: PopupContent): HTMLElement {
+  const node = document.createElement("div");
+  node.className = "map-popup";
+  const heading = document.createElement("p");
+  heading.className = "map-popup-title";
+  heading.textContent = title;
+  node.append(heading);
+  for (const line of lines) {
+    const p = document.createElement("p");
+    p.textContent = line;
+    node.append(p);
+  }
+  return node;
 }
 
 // 市区町村の面と境界線。
