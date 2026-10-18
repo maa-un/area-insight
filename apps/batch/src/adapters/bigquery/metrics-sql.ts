@@ -28,6 +28,52 @@ const CONDO_TYPE = "中古マンション等";
 const RECENT_TRANSACTIONS = 8;
 // 地価の用途区分のうち、取引単価と比べるもの（API は「0,住宅地」の形で返す。番号を除いた名前で比べる）。
 const RESIDENTIAL_USE = "住宅地";
+// 地価の地点の「最寄り駅」に付く事業者の接頭辞（「ＪＲ姫路」「阪急伊丹」「地下鉄名古屋」「〔地〕泉中央」）。
+// 駅データ（XKT015）の駅名には付かないため、突き合わせのときに除く。2026-10 の実データで、除くと駅名が一致する接頭辞を
+// 件数の多い順に挙げた（バス停は駅ではないので除かない）。長い名前を先に置く（「神戸市営地下鉄」を「地下鉄」より先に見る）。
+const STATION_OPERATOR_PREFIXES = [
+  "神戸市営地下鉄",
+  "神戸高速",
+  "神戸電鉄",
+  "北大阪急行",
+  "大阪モノレール",
+  "OsakaMetro",
+  "つくばエクスプレス",
+  "山陽電鉄",
+  "能勢電鉄",
+  "北条鉄道",
+  "伊賀鉄",
+  "あすなろう",
+  "いさ鉄",
+  "新交通",
+  "地下鉄",
+  "小田急",
+  "〔BRT〕",
+  "〔地〕",
+  "〔私〕",
+  "BRT",
+  "JR",
+  "阪急",
+  "阪神",
+  "京阪",
+  "近鉄",
+  "南海",
+  "京王",
+  "京急",
+  "京成",
+  "京福",
+  "東急",
+  "東武",
+  "西武",
+  "相鉄",
+  "名鉄",
+  "甘鉄",
+  "丹鉄",
+  "三岐",
+  "叡山",
+  "都営",
+  "電停",
+] as const;
 // 駅からの距離を徒歩の分に直す基準（不動産の表示規約: 80m を 1 分とする）。
 const METERS_PER_WALK_MINUTE = 80;
 // 駅からの距離の区切り（徒歩 10 分以内・20 分以内・それ以上）。
@@ -102,6 +148,15 @@ const distanceMeters = (column: string) => `CASE
 const json = (column: string) =>
   `IF(JSON_TYPE(${column}) = 'string', SAFE.PARSE_JSON(JSON_VALUE(${column})), ${column})`;
 const prop = (column: string, path: string) => `JSON_VALUE(${json(column)}, '${path}')`;
+
+// 駅名を突き合わせるためのキー。全角英数を半角に（「ＪＲ」→「JR」「北２４条」→「北24条」）、漢字に挟まれた
+// 「ケ」「ヵ」「カ」を「ヶ」にそろえる（地価側「茅ケ崎」、駅データ側「茅ヶ崎」）。画面に出す駅名には使わず、駅データ側の表記のままにする。
+const stationKey = (column: string) =>
+  `REGEXP_REPLACE(NORMALIZE(${column}, NFKC), r'(\\p{Han})[ケヵカ](\\p{Han})', r'\\1ヶ\\2')`;
+// キーから事業者の接頭辞を除く（「JR姫路」→「姫路」）。接頭辞そのものが駅名の一部のこともある（「近鉄四日市」）ため、
+// 除く前の名前が駅データに無いときだけ使う。
+const stationKeyWithoutOperator = (column: string) =>
+  `REGEXP_REPLACE(${column}, r'^(?:${STATION_OPERATOR_PREFIXES.join("|")})', '')`;
 
 // 駅からの距離（m）→ 区分の名前（within10 / within20 / over20）。
 const stationDistanceBand = (column: string) =>
@@ -552,19 +607,33 @@ export function metricsSql(dataset: string): MetricsSql {
       FROM adjusted GROUP BY longitude, latitude
     ),
     ${stationNames},
-    -- 同じ駅が最寄りの住宅地の地価（距離別）。駅名は地価の地点の「最寄り駅」と駅（XKT015）の駅名で突き合わせる
+    -- 同じ駅が最寄りの住宅地の地価（距離別）。駅名は地価の地点の「最寄り駅」と駅（XKT015）の駅名を、表記をそろえたキーで突き合わせる。
+    -- 地価側は「ＪＲ姫路」「阪急伊丹」のように事業者の接頭辞が付くことがあるため、そのままの名前が駅データに無ければ接頭辞を除いて探す
+    station_keys AS (
+      SELECT DISTINCT ${stationKey("station_name")} AS station_key FROM stations WHERE station_name IS NOT NULL
+    ),
+    land_points AS (
+      SELECT
+        p.prefecture_code, p.price, p.station_distance_m,
+        COALESCE(exact.station_key, stripped.station_key, ${stationKey("p.station_name")}) AS station_key
+      FROM ${t("land_price_points")} AS p
+      LEFT JOIN station_keys AS exact ON exact.station_key = ${stationKey("p.station_name")}
+      LEFT JOIN station_keys AS stripped
+        ON stripped.station_key = ${stationKeyWithoutOperator(stationKey("p.station_name"))}
+      WHERE p.use = '${RESIDENTIAL_USE}' AND p.station_name IS NOT NULL AND p.station_name != ''
+        AND p.station_distance_m IS NOT NULL
+    ),
     official_bands AS (
-      SELECT prefecture_code, station_name,
+      SELECT prefecture_code, station_key,
         ARRAY_AGG(STRUCT(band, price, count) ORDER BY ${stationDistanceBandOrder("band")}) AS bands
       FROM (
-        SELECT prefecture_code, station_name, band,
+        SELECT prefecture_code, station_key, band,
           ROUND(APPROX_QUANTILES(price, 100)[SAFE_OFFSET(50)]) AS price, COUNT(*) AS count
         FROM (
-          SELECT prefecture_code, station_name, price, ${stationDistanceBand("station_distance_m")} AS band
-          FROM ${t("land_price_points")}
-          WHERE use = '${RESIDENTIAL_USE}' AND station_name IS NOT NULL AND station_distance_m IS NOT NULL
-        ) GROUP BY prefecture_code, station_name, band
-      ) GROUP BY prefecture_code, station_name
+          SELECT prefecture_code, station_key, price, ${stationDistanceBand("station_distance_m")} AS band
+          FROM land_points
+        ) GROUP BY prefecture_code, station_key, band
+      ) GROUP BY prefecture_code, station_key
     )
     SELECT
       nearest.station.station_name,
@@ -582,7 +651,7 @@ export function metricsSql(dataset: string): MetricsSql {
     LEFT JOIN lines ON lines.group_code = nearest.station.group_code
     LEFT JOIN official_bands
       ON official_bands.prefecture_code = points.prefecture_code
-      AND official_bands.station_name = nearest.station.station_name
+      AND official_bands.station_key = ${stationKey("nearest.station.station_name")}
     CROSS JOIN target`;
 
   // マンションの成約事例（XPT001 の中古マンション等）。1 件ずつ、最寄り駅の名前と、読める形にした値を付けて出す。

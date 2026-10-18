@@ -152,6 +152,24 @@ describe("metricsSql", () => {
     expect(station).toContain("AS official_by_station_distance");
   });
 
+  it("matches land price points to stations by a normalized station name", () => {
+    const station = table("station_land_prices");
+    // 全角英数を半角に、漢字に挟まれた「ケ」「ヵ」「カ」を「ヶ」にそろえる（両側に適用）
+    const key = (column: string) =>
+      `REGEXP_REPLACE(NORMALIZE(${column}, NFKC), r'(\\p{Han})[ケヵカ](\\p{Han})', r'\\1ヶ\\2')`;
+    expect(station).toContain(`${key("station_name")} AS station_key FROM stations`);
+    expect(station).toContain(`exact.station_key = ${key("p.station_name")}`);
+    expect(station).toContain(
+      `official_bands.station_key = ${key("nearest.station.station_name")}`,
+    );
+    // 事業者の接頭辞は、そのままの名前が駅データに無いときだけ除く。長い接頭辞を先に見る
+    expect(station).toContain("COALESCE(exact.station_key, stripped.station_key, ");
+    expect(station).toMatch(/r'\^\(\?:神戸市営地下鉄\|.*\|地下鉄\|.*\|JR\|.*\)'/);
+    expect(station).not.toContain("バス停");
+    // 画面に出す駅名は駅データ側の表記のまま
+    expect(station).toContain("SELECT\n      nearest.station.station_name,");
+  });
+
   it("limits station trade prices to the latest four quarters of the fetched eight", () => {
     const station = table("station_metrics");
     expect(station).toContain("$.point_in_time_name_ja");
