@@ -70,6 +70,8 @@ type Conditions = {
   pref?: string;
   // 参考値（取引件数が閾値未満）の市区町村も含めるか。既定は含めない
   includeReference: boolean;
+  // 値の無い（データなし）市区町村を除くか。既定は末尾に並べる
+  excludeNoData: boolean;
 };
 
 function conditionsOf(params: URLSearchParams): Conditions {
@@ -83,25 +85,35 @@ function conditionsOf(params: URLSearchParams): Conditions {
       order === "asc" || order === "desc" ? order : METRICS[key].better === "low" ? "asc" : "desc",
     pref: pref && PREFECTURE_CODES.includes(pref) ? pref : undefined,
     includeReference: params.get("ref") === "1",
+    excludeNoData: params.get("nodata") === "0",
   };
 }
 
 function describe(c: Conditions): string {
   const area = c.pref ? prefectureName(c.pref) : "全国";
-  const reference = isTradeMetric(c.metric) && c.includeReference ? "（参考値を含む）" : "";
-  return `${area}・${METRICS[c.metric].label}の${c.order === "asc" ? "低い" : "高い"}順${reference}`;
+  const notes = [
+    isTradeMetric(c.metric) && c.includeReference && "参考値を含む",
+    c.excludeNoData && "データなしを除く",
+  ].filter(Boolean);
+  const suffix = notes.length > 0 ? `（${notes.join("・")}）` : "";
+  return `${area}・${METRICS[c.metric].label}の${c.order === "asc" ? "低い" : "高い"}順${suffix}`;
 }
 
 export function RankingsPage() {
   const params = useSearchParams();
   const conditions = conditionsOf(params);
-  const { metric, order, pref, includeReference } = conditions;
+  const { metric, order, pref, includeReference, excludeNoData } = conditions;
   const inPrefecture = pref
     ? dataset.areas.filter((a) => a.prefectureCode === pref)
     : dataset.areas;
   const ranked = rankableAreas(inPrefecture, metric, includeReference);
   const hidden = inPrefecture.length - ranked.length;
-  const rows = sortAreas(ranked, metric, order);
+  const noData = ranked.filter((a) => a[metric] === null).length;
+  const rows = sortAreas(
+    excludeNoData ? ranked.filter((a) => a[metric] !== null) : ranked,
+    metric,
+    order,
+  );
   const page = clampPage(Number(params.get("page") ?? 1), rows.length, PER_PAGE);
   const offset = (page - 1) * PER_PAGE;
   const pageRows = pageSlice(rows, page, PER_PAGE);
@@ -193,23 +205,32 @@ export function RankingsPage() {
         </p>
       )}
 
-      {isTradeMetric(metric) && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          <label htmlFor="include-reference" className="flex items-center gap-2 font-medium">
-            <Switch
-              id="include-reference"
-              checked={includeReference}
-              onCheckedChange={(checked) => setConditions({ ref: checked ? "1" : undefined })}
-            />
-            参考値も含める
-          </label>
-          <span className="text-xs text-muted-foreground">
-            {includeReference
-              ? `取引 ${RELIABLE_TRADE_COUNT} 件未満の市区町村（参考値）も並べています`
-              : `取引 ${RELIABLE_TRADE_COUNT} 件未満の ${hidden.toLocaleString("ja-JP")} 市区町村（参考値）を除いています`}
-          </span>
-        </div>
-      )}
+      <div className="flex flex-col gap-2">
+        {isTradeMetric(metric) && (
+          <Toggle
+            id="include-reference"
+            label="参考値も含める"
+            checked={includeReference}
+            onChange={(checked) => setConditions({ ref: checked ? "1" : undefined })}
+            note={
+              includeReference
+                ? `取引 ${RELIABLE_TRADE_COUNT} 件未満の市区町村（参考値）も並べています`
+                : `取引 ${RELIABLE_TRADE_COUNT} 件未満の ${hidden.toLocaleString("ja-JP")} 市区町村（参考値）を除いています`
+            }
+          />
+        )}
+        <Toggle
+          id="exclude-no-data"
+          label="データなしを除く"
+          checked={excludeNoData}
+          onChange={(checked) => setConditions({ nodata: checked ? "0" : undefined })}
+          note={
+            excludeNoData
+              ? `「${METRICS[metric].label}」のデータが無い ${noData.toLocaleString("ja-JP")} 市区町村を除いています`
+              : `「${METRICS[metric].label}」のデータが無い市区町村は末尾に並べています`
+          }
+        />
+      </div>
 
       <div
         ref={tableRef}
@@ -334,6 +355,30 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function Toggle({
+  id,
+  label,
+  checked,
+  onChange,
+  note,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  note: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+      <label htmlFor={id} className="flex items-center gap-2 font-medium">
+        <Switch id={id} checked={checked} onCheckedChange={onChange} />
+        {label}
+      </label>
+      <span className="text-xs text-muted-foreground">{note}</span>
+    </div>
+  );
+}
+
 function CompareToggle({ code }: { code: string }) {
   const { compare } = useUserData();
   const added = compare.includes(code);
@@ -362,6 +407,7 @@ function SavedFilters({ current }: { current: Conditions }) {
     const conditions: Record<string, string> = { metric: current.metric, order: current.order };
     if (current.pref) conditions.pref = current.pref;
     if (current.includeReference) conditions.ref = "1";
+    if (current.excludeNoData) conditions.nodata = "0";
     saveFilters([...filters, { name, conditions }].slice(-MAX_FILTERS));
   };
 
@@ -382,6 +428,7 @@ function SavedFilters({ current }: { current: Conditions }) {
                 order: String(filter.conditions.order ?? ""),
                 pref: String(filter.conditions.pref ?? ""),
                 ref: String(filter.conditions.ref ?? ""),
+                nodata: String(filter.conditions.nodata ?? ""),
               })
             }
           >
