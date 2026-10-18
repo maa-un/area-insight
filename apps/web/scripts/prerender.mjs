@@ -8,7 +8,7 @@ const template = await readFile(`${root}/dist/index.html`, "utf8");
 const { render, pages } = await import(`${root}/dist-ssr/entry-server.js`);
 
 // 公開する URL のオリジン。sitemap と canonical に使う。
-const origin = process.env.SITE_ORIGIN ?? "https://gc.maa-un.com";
+const origin = process.env.SITE_ORIGIN ?? "https://machinome.maa-un.com";
 
 const escapeHtml = (value) =>
   value

@@ -1,6 +1,6 @@
 # area-insight
 
-一般ユーザー向けの不動産エリア分析サービス。仕様は Claude Docs の「area-insight 仕様書」にある。
+一般ユーザー向けの不動産エリア分析サービス「マチノメ」（https://machinome.maa-un.com）。仕様は Claude Docs の「area-insight 仕様書」にある。
 
 ## 構成と責務
 
