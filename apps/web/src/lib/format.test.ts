@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatDistance,
   formatGap,
+  formatManYenPerSqm,
   formatManYenPerTsubo,
   formatRatio,
   formatTsuboRange,
@@ -37,6 +38,11 @@ describe("tsubo prices", () => {
     expect(formatManYenPerTsubo(121000)).toBe("40.0万円/坪");
     expect(formatManYenPerTsubo(null)).toBe(NO_DATA);
     expect(formatTsuboRange(121000, 151250)).toBe("40.0〜50.0万円/坪");
+  });
+
+  it("shows the price per square metre in ten thousand yen", () => {
+    expect(formatManYenPerSqm(953000)).toBe("95.3万円/㎡");
+    expect(formatManYenPerSqm(null)).toBe(NO_DATA);
   });
 });
 

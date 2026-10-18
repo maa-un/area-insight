@@ -250,3 +250,20 @@
     navigation: none;
   }
 }
+
+/* 地図の吹き出し（MapLibre の Popup）。既定の白地を、画面の配色（ダークモードを含む）に合わせる */
+.maplibregl-popup-content {
+  @apply rounded-xl border bg-popover px-3 py-2.5 text-popover-foreground shadow-md;
+}
+.maplibregl-popup-tip {
+  display: none;
+}
+.maplibregl-popup-close-button {
+  @apply px-1.5 text-base text-muted-foreground;
+}
+.map-popup {
+  @apply flex flex-col gap-0.5 pr-4 text-xs text-muted-foreground tabular-nums;
+}
+.map-popup-title {
+  @apply text-sm font-semibold text-foreground;
+}

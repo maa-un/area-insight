@@ -46,11 +46,12 @@ import {
   formatCount,
   formatLines,
   formatManYen,
+  formatManYenPerSqm,
   formatManYenPerTsubo,
   formatQuarter,
   formatTsuboRange,
 } from "@/lib/format";
-import type { MapController } from "@/lib/map-engine";
+import type { MapController, PopupContent } from "@/lib/map-engine";
 import { quantileScale, SCALE_COLORS } from "@/lib/map-scale";
 import { clampPage, pageSlice } from "@/lib/pagination";
 import { formatDataPeriod } from "@/lib/period";
@@ -180,6 +181,35 @@ export function CondosPage() {
     );
   }, [ready, file, byStation, scale, selected]);
 
+  // 選んだ駅の吹き出し。駅を選び直したときに開き、条件を変えたときは開いていれば中身だけ差し替える
+  const popup = useMemo<PopupContent | null>(() => {
+    if (selected === null || !file) return null;
+    const summary = byStation.get(selected);
+    return {
+      title: stationName(file, selected),
+      lines: summary
+        ? [
+            `坪単価（中央値） ${formatManYenPerTsubo(summary.median)}`,
+            formatCount(summary.count, "件"),
+          ]
+        : ["条件に合う取引はありません"],
+    };
+  }, [file, byStation, selected]);
+  const popupRef = useRef(popup);
+  popupRef.current = popup;
+
+  useEffect(() => {
+    if (!ready) return;
+    const coordinates = selected === null ? undefined : file?.stations[selected]?.coordinates;
+    const content = popupRef.current;
+    if (coordinates && content) controller.current?.showPopup(coordinates, content);
+    else controller.current?.closePopup();
+  }, [ready, file, selected]);
+
+  useEffect(() => {
+    if (ready && popup) controller.current?.updatePopup(popup);
+  }, [ready, popup]);
+
   const station = selected === null ? null : (file?.stations[selected] ?? null);
   const scopeTrades = useMemo(
     () => (selected === null ? filtered : filtered.filter((t) => t.station === selected)),
@@ -237,7 +267,7 @@ export function CondosPage() {
               onBack={station ? () => setSelected(null) : undefined}
             />
             {station ? (
-              <TradeList key={selected} trades={scopeTrades} />
+              <TradeList key={selected} file={file} trades={scopeTrades} />
             ) : (
               <StationList file={file} byStation={byStation} onSelect={setSelected} />
             )}
@@ -717,7 +747,12 @@ function StationList({
   );
 }
 
-function TradeList({ trades }: { trades: Trade[] }) {
+function stationName(file: CondoFile, index: number): string {
+  const station = file.stations[index];
+  return station ? stationLabel(station) : "駅名不明";
+}
+
+function TradeList({ file, trades }: { file: CondoFile; trades: Trade[] }) {
   const [requested, setPage] = useState(1);
   if (trades.length === 0) return null;
   const page = clampPage(requested, trades.length, SHOWN_TRADES);
@@ -729,7 +764,11 @@ function TradeList({ trades }: { trades: Trade[] }) {
           <li key={t.id} className="flex gap-3 px-3 py-2.5 text-sm">
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs text-muted-foreground">
-                {formatQuarter(t.period)}・{t.district || "地区不明"}
+                {[
+                  formatQuarter(t.period),
+                  stationName(file, t.station),
+                  t.district || "地区不明",
+                ].join("・")}
               </p>
               <p className="truncate">
                 {[
@@ -750,6 +789,7 @@ function TradeList({ trades }: { trades: Trade[] }) {
             <div className="text-right tabular-nums">
               <p className="font-semibold">{formatManYen(t.price)}</p>
               <p className="text-xs text-muted-foreground">{formatManYenPerTsubo(t.perSqm)}</p>
+              <p className="text-xs text-muted-foreground">{formatManYenPerSqm(t.perSqm)}</p>
             </div>
           </li>
         ))}
