@@ -103,6 +103,69 @@ const json = (column: string) =>
   `IF(JSON_TYPE(${column}) = 'string', SAFE.PARSE_JSON(JSON_VALUE(${column})), ${column})`;
 const prop = (column: string, path: string) => `JSON_VALUE(${json(column)}, '${path}')`;
 
+// 駅名を突き合わせるための形。地価の地点の最寄り駅名（XPT002）と駅（XKT015）の駅名の両方に同じ規則を使う。
+// 全角の英数字を半角にし（「ＪＲ」→「JR」「西１１丁目」→「西11丁目」）、「ケ」を「ヶ」にそろえる（「茅ケ崎」→「茅ヶ崎」）。
+// 画面に出す駅名は元の表記のまま。
+const stationNameKey = (column: string) => `REPLACE(NORMALIZE(${column}, NFKC), 'ケ', 'ヶ')`;
+
+// 地価の地点の最寄り駅名に付く事業者の接頭辞（「阪急伊丹」「〔地〕泉中央」「ＯｓａｋａＭｅｔｒｏ本町」など。
+// stationNameKey でそろえた後の形）。XKT015 には「名鉄岐阜」「近鉄八尾」「京急川崎」のように事業者名を含む駅名も
+// あるため、そろえた駅名が XKT015 に無いときだけ外す（一律に外すと「近鉄八尾」が JR の「八尾」に混ざる）。
+// 2026-10 の実データの不一致から選んだ。長い順に並べ、「山陽電鉄」を「山陽」より先に試す。
+const STATION_OPERATOR_PREFIXES = [
+  "JR",
+  "地下鉄",
+  "神戸市営地下鉄",
+  "OsakaMetro",
+  "北大阪急行",
+  "大阪モノレール",
+  "モノレール",
+  "阪急",
+  "阪神",
+  "阪堺",
+  "京阪",
+  "京福",
+  "叡山",
+  "南海",
+  "水間鉄道",
+  "近鉄",
+  "伊賀鉄",
+  "伊勢鉄",
+  "三岐",
+  "養老",
+  "あすなろう",
+  "名鉄",
+  "小田急",
+  "京急",
+  "京成",
+  "京王",
+  "東急",
+  "東武",
+  "西武",
+  "相鉄",
+  "都営",
+  "つくばエクスプレス",
+  "山陽電鉄",
+  "山陽",
+  "神戸電鉄",
+  "神戸高速",
+  "神戸新交通",
+  "新交通",
+  "能勢電鉄",
+  "北条鉄道",
+  "智頭急行",
+  "丹鉄",
+  "北鉄",
+  "弘南",
+  "いさ鉄",
+  "西鉄",
+  "甘鉄",
+  "BRT",
+].sort((a, b) => b.length - a.length);
+// 接頭辞（「〔地〕」「［私］」のような括弧書きも）と、末尾の「駅」を外す。
+const withoutStationOperator = (key: string) =>
+  `REGEXP_REPLACE(REGEXP_REPLACE(${key}, r'^(?:${STATION_OPERATOR_PREFIXES.join("|")}|〔[^〕]*〕|\\[[^\\]]*\\])', ''), r'駅$', '')`;
+
 // 駅からの距離（m）→ 区分の名前（within10 / within20 / over20）。
 const stationDistanceBand = (column: string) =>
   `CASE ${STATION_DISTANCE_BANDS.map(
@@ -552,19 +615,30 @@ export function metricsSql(dataset: string): MetricsSql {
       FROM adjusted GROUP BY longitude, latitude
     ),
     ${stationNames},
-    -- 同じ駅が最寄りの住宅地の地価（距離別）。駅名は地価の地点の「最寄り駅」と駅（XKT015）の駅名で突き合わせる
+    -- 同じ駅が最寄りの住宅地の地価（距離別）。駅名は地価の地点の「最寄り駅」と駅（XKT015）の駅名を、
+    -- 表記をそろえた形（name_key）で突き合わせる。そろえても XKT015 に無い駅名は、事業者の接頭辞を外して突き合わせる
+    station_name_keys AS (
+      SELECT DISTINCT ${stationNameKey("station_name")} AS name_key FROM stations
+    ),
+    official_points AS (
+      SELECT
+        l.prefecture_code, l.price, ${stationDistanceBand("l.station_distance_m")} AS band,
+        IF(k.name_key IS NULL, ${withoutStationOperator("l.name_key")}, l.name_key) AS name_key
+      FROM (
+        SELECT prefecture_code, price, station_distance_m, ${stationNameKey("station_name")} AS name_key
+        FROM ${t("land_price_points")}
+        WHERE use = '${RESIDENTIAL_USE}' AND station_name IS NOT NULL AND station_distance_m IS NOT NULL
+      ) AS l
+      LEFT JOIN station_name_keys AS k USING (name_key)
+    ),
     official_bands AS (
-      SELECT prefecture_code, station_name,
+      SELECT prefecture_code, name_key,
         ARRAY_AGG(STRUCT(band, price, count) ORDER BY ${stationDistanceBandOrder("band")}) AS bands
       FROM (
-        SELECT prefecture_code, station_name, band,
+        SELECT prefecture_code, name_key, band,
           ROUND(APPROX_QUANTILES(price, 100)[SAFE_OFFSET(50)]) AS price, COUNT(*) AS count
-        FROM (
-          SELECT prefecture_code, station_name, price, ${stationDistanceBand("station_distance_m")} AS band
-          FROM ${t("land_price_points")}
-          WHERE use = '${RESIDENTIAL_USE}' AND station_name IS NOT NULL AND station_distance_m IS NOT NULL
-        ) GROUP BY prefecture_code, station_name, band
-      ) GROUP BY prefecture_code, station_name
+        FROM official_points GROUP BY prefecture_code, name_key, band
+      ) GROUP BY prefecture_code, name_key
     )
     SELECT
       nearest.station.station_name,
@@ -582,7 +656,7 @@ export function metricsSql(dataset: string): MetricsSql {
     LEFT JOIN lines ON lines.group_code = nearest.station.group_code
     LEFT JOIN official_bands
       ON official_bands.prefecture_code = points.prefecture_code
-      AND official_bands.station_name = nearest.station.station_name
+      AND official_bands.name_key = ${stationNameKey("nearest.station.station_name")}
     CROSS JOIN target`;
 
   // マンションの成約事例（XPT001 の中古マンション等）。1 件ずつ、最寄り駅の名前と、読める形にした値を付けて出す。

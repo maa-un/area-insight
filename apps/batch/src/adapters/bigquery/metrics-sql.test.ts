@@ -152,6 +152,49 @@ describe("metricsSql", () => {
     expect(station).toContain("AS official_by_station_distance");
   });
 
+  it("matches official land prices to stations by normalized station names", () => {
+    const station = table("station_land_prices");
+    // 両側の駅名を同じ規則でそろえる（全角→半角、「ケ」→「ヶ」）
+    expect(station).toContain(
+      "SELECT DISTINCT REPLACE(NORMALIZE(station_name, NFKC), 'ケ', 'ヶ') AS name_key FROM stations",
+    );
+    expect(station).toContain(
+      "REPLACE(NORMALIZE(station_name, NFKC), 'ケ', 'ヶ') AS name_key\n        FROM `proj.ds.land_price_points`",
+    );
+    expect(station).toContain(
+      "official_bands.name_key = REPLACE(NORMALIZE(nearest.station.station_name, NFKC), 'ケ', 'ヶ')",
+    );
+    // 画面に出す駅名は元の表記のまま
+    expect(station).toContain("SELECT\n      nearest.station.station_name,");
+  });
+
+  it("drops operator prefixes only from names that are not stations themselves", () => {
+    const station = table("station_land_prices");
+    // 「近鉄八尾」のように XKT015 にある駅名は外さない
+    expect(station).toContain(
+      "IF(k.name_key IS NULL, REGEXP_REPLACE(REGEXP_REPLACE(l.name_key, r'^(?:",
+    );
+    const prefixes = /r'\^\(\?:([^']+)\)'/.exec(station)?.[1]?.split("|") ?? [];
+    expect(prefixes).toEqual(
+      expect.arrayContaining([
+        "JR",
+        "地下鉄",
+        "阪急",
+        "阪神",
+        "京阪",
+        "小田急",
+        "名鉄",
+        "OsakaMetro",
+      ]),
+    );
+    // 〔地〕・［私］のような括弧書き
+    expect(prefixes).toContain("〔[^〕]*〕");
+    expect(prefixes).toContain("\\[[^\\]]*\\]");
+    // 長い接頭辞を先に試す（「山陽電鉄播磨町」から「山陽」だけを外さない）
+    expect(prefixes.indexOf("山陽電鉄")).toBeLessThan(prefixes.indexOf("山陽"));
+    expect(station).toContain("r'駅$', '')");
+  });
+
   it("limits station trade prices to the latest four quarters of the fetched eight", () => {
     const station = table("station_metrics");
     expect(station).toContain("$.point_in_time_name_ja");
