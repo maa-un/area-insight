@@ -1,6 +1,10 @@
 import {
+  ArrowUpRight,
   Building2,
+  Calculator,
+  CalendarClock,
   Columns3,
+  Database,
   FlaskConical,
   Home,
   ListOrdered,
@@ -14,6 +18,7 @@ import { openSearch, SearchDialog } from "@/components/search-dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { dataset } from "@/data";
 import { formatDate } from "@/lib/format";
+import { PROPFOLIO_URL } from "@/lib/propfolio";
 import { useUserData } from "@/lib/user-data";
 import { cn } from "@/lib/utils";
 import { comparePath, type PageName } from "@/routes";
@@ -252,34 +257,102 @@ function SampleNotice({ compact = false, className }: { compact?: boolean; class
   );
 }
 
+const OPERATOR_URL = "https://maa-un.com/";
+
 function SiteFooter() {
   return (
-    <footer className="border-t bg-muted/40">
-      <div className="mx-auto w-full max-w-6xl px-4 py-8 text-xs leading-relaxed text-muted-foreground sm:px-6 lg:px-10">
-        <div className="flex flex-col gap-1">
-          <p>
-            データの更新日: {formatDate(dataset.updatedAt)}
-            （指標ごとの時点は各数字のそばに示します）
+    <footer className="relative overflow-hidden border-t bg-muted/40">
+      {/* ヘッダーのロゴと同じ色味を、上端にうっすら敷く */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/[0.06] to-transparent"
+      />
+      <div className="relative mx-auto flex w-full max-w-4xl flex-col items-center gap-8 px-4 py-12 text-center text-xs leading-relaxed text-muted-foreground sm:px-6">
+        <div className="flex flex-col items-center gap-3">
+          <Logo className="text-lg text-foreground" />
+          <p className="inline-flex items-center gap-1.5 rounded-full border bg-background/70 px-3 py-1 shadow-xs">
+            <CalendarClock className="size-3.5 text-primary" aria-hidden />
+            データ更新日 {formatDate(dataset.updatedAt)}
           </p>
-          <p>掲載する指標は目安であり、投資判断を保証するものではありません。</p>
+          <p className="max-w-md">
+            指標ごとの時点は、各数値の近くに記載しています。掲載している指標はエリア選びの目安であり、投資判断を保証するものではありません。
+          </p>
         </div>
+
+        <div className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+          <FooterCard
+            href={OPERATOR_URL}
+            icon={Building2}
+            eyebrow="運営会社"
+            title="合同会社Maa'un Japan"
+          />
+          <FooterCard
+            href={PROPFOLIO_URL}
+            icon={Calculator}
+            eyebrow="関連サービス"
+            title="PropFolio"
+            description="不動産投資の収支計算・ポートフォリオ管理"
+          />
+        </div>
+
         <Credits />
-        <div className="mt-4 flex gap-4">
-          <a
-            className="font-medium text-foreground underline-offset-4 hover:underline"
-            href="/terms/"
-          >
-            利用規約
-          </a>
-          <a
-            className="font-medium text-foreground underline-offset-4 hover:underline"
-            href="/privacy/"
-          >
-            プライバシーポリシー
-          </a>
+
+        <div className="flex w-full flex-col items-center gap-3 border-t pt-6">
+          <nav className="flex items-center gap-3">
+            <a
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+              href="/terms/"
+            >
+              利用規約
+            </a>
+            <span aria-hidden className="h-3 w-px bg-border" />
+            <a
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+              href="/privacy/"
+            >
+              プライバシーポリシー
+            </a>
+          </nav>
+          <p>© {new Date(dataset.updatedAt).getFullYear()} 合同会社Maa'un Japan</p>
         </div>
       </div>
     </footer>
+  );
+}
+
+function FooterCard({
+  href,
+  icon: Icon,
+  eyebrow,
+  title,
+  description,
+}: {
+  href: string;
+  icon: ComponentType<{ className?: string }>;
+  eyebrow: string;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener"
+      className="group flex items-center gap-3 rounded-xl border bg-background p-3.5 text-left shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
+        <Icon className="size-5" aria-hidden />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-[11px] text-muted-foreground">{eyebrow}</span>
+        <span className="font-semibold text-sm text-foreground">{title}</span>
+        {description && <span>{description}</span>}
+      </span>
+      <ArrowUpRight
+        className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary"
+        aria-hidden
+      />
+    </a>
   );
 }
 
@@ -293,71 +366,107 @@ function SiteFooter() {
 //     どのデータで駅名を付けたかが分かるよう、取引価格の作成の注記に添える
 //   国土数値情報（行政区域）: CC BY 4.0（PDL1.0 の追加記載例どおり、加工したことと作成者を示す）
 //   社人研（将来推計人口）: PDL1.0（出典を記載し、加工したことを示す）
+// 「このサービスは、…API機能を使用していますが」の 2 つの文は、各 API 利用規約が指定する文言から変えない。
+// 同じ書き出しが続かないよう、それぞれの取得元の行に添える。
 const link = "underline underline-offset-2 hover:text-foreground";
 
-function Credits() {
+function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <div className="mt-4 flex flex-col gap-1">
-      <p>
-        出典：国土交通省 不動産情報ライブラリ（
-        <a className={link} href="https://www.reinfolib.mlit.go.jp/" target="_blank" rel="noopener">
-          https://www.reinfolib.mlit.go.jp/
-        </a>
-        ）、政府統計の総合窓口（e-Stat）、
-        <a
-          className={link}
-          href="https://maps.gsi.go.jp/development/ichiran.html"
-          target="_blank"
-          rel="noopener"
-        >
-          地理院タイル
-        </a>
-        （国土地理院）、
-        <a className={link} href="https://openfreemap.org/" target="_blank" rel="noopener">
-          OpenFreeMap
-        </a>{" "}
-        <a className={link} href="https://www.openmaptiles.org/" target="_blank" rel="noopener">
-          © OpenMapTiles
-        </a>{" "}
-        <a
-          className={link}
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noopener"
-        >
-          © OpenStreetMap contributors
-        </a>
-      </p>
-      <p>
-        取引価格の中央値・推移・想定利回りは「不動産取引価格情報」（国土交通省）をもとに合同会社Maa'un
-        Japan
-        が作成しました。駅ごとの取引相場の駅名・路線名は「国土数値情報（駅別乗降客数データ）」（国土交通省）から、位置の近い駅を付けたものです。
-      </p>
-      <p>
-        地図の市区町村の境界：
-        <a
-          className={link}
-          href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html"
-          target="_blank"
-          rel="noopener"
-        >
-          国土数値情報（行政区域データ）
-        </a>
-        （国土交通省）をもとに合同会社Maa'un Japan 作成
-      </p>
-      <p>
-        将来の人口は「日本の地域別将来推計人口（令和5（2023）年推計）」（
-        <a className={link} href="https://www.ipss.go.jp/" target="_blank" rel="noopener">
-          国立社会保障・人口問題研究所
-        </a>
-        ）をもとに合同会社Maa'un Japan が加工しました。
-      </p>
-      <p>
-        このサービスは、国土交通省の不動産情報ライブラリのAPI機能を使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません。
-      </p>
-      <p>
-        このサービスは、政府統計総合窓口(e-Stat)のAPI機能を使用していますが、サービスの内容は国によって保証されたものではありません。
-      </p>
-    </div>
+    <a className={link} href={href} target="_blank" rel="noopener">
+      {children}
+    </a>
+  );
+}
+
+function ApiNotice({ children }: { children: ReactNode }) {
+  return <span className="mt-0.5 block">{children}</span>;
+}
+
+function Credits() {
+  const sources: { label: string; body: ReactNode }[] = [
+    {
+      label: "取引価格",
+      body: (
+        <>
+          出典：国土交通省 不動産情報ライブラリ（
+          <ExternalLink href="https://www.reinfolib.mlit.go.jp/">
+            https://www.reinfolib.mlit.go.jp/
+          </ExternalLink>
+          ）。取引価格の中央値・推移・想定利回りは、「不動産取引価格情報」（国土交通省）をもとに合同会社Maa'un
+          Japan が作成しました。
+          <ApiNotice>
+            このサービスは、国土交通省の不動産情報ライブラリのAPI機能を使用していますが、提供情報の最新性、正確性、完全性等が保証されたものではありません。
+          </ApiNotice>
+        </>
+      ),
+    },
+    {
+      label: "駅名・路線名",
+      body: "「国土数値情報（駅別乗降客数データ）」（国土交通省）。駅ごとの取引相場には、位置の近い駅の駅名・路線名を付しています。",
+    },
+    {
+      label: "統計データ",
+      body: (
+        <>
+          政府統計の総合窓口（e-Stat）
+          <ApiNotice>
+            このサービスは、政府統計総合窓口(e-Stat)のAPI機能を使用していますが、サービスの内容は国によって保証されたものではありません。
+          </ApiNotice>
+        </>
+      ),
+    },
+    {
+      label: "将来の人口",
+      body: (
+        <>
+          「日本の地域別将来推計人口（令和5（2023）年推計）」（
+          <ExternalLink href="https://www.ipss.go.jp/">国立社会保障・人口問題研究所</ExternalLink>
+          ）をもとに合同会社Maa'un Japan が加工しました。
+        </>
+      ),
+    },
+    {
+      label: "市区町村の境界",
+      body: (
+        <>
+          <ExternalLink href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html">
+            国土数値情報（行政区域データ）
+          </ExternalLink>
+          （国土交通省）をもとに合同会社Maa'un Japan が作成しました。
+        </>
+      ),
+    },
+    {
+      label: "地図",
+      body: (
+        <>
+          <ExternalLink href="https://maps.gsi.go.jp/development/ichiran.html">
+            地理院タイル
+          </ExternalLink>
+          （国土地理院）。背景を「建物」にしたときは{" "}
+          <ExternalLink href="https://openfreemap.org/">OpenFreeMap</ExternalLink>{" "}
+          <ExternalLink href="https://www.openmaptiles.org/">© OpenMapTiles</ExternalLink>{" "}
+          <ExternalLink href="https://www.openstreetmap.org/copyright">
+            © OpenStreetMap contributors
+          </ExternalLink>
+        </>
+      ),
+    },
+  ];
+  return (
+    <section className="flex w-full flex-col items-center gap-3">
+      <h2 className="inline-flex items-center gap-1.5 font-semibold text-foreground">
+        <Database className="size-3.5 text-primary" aria-hidden />
+        出典
+      </h2>
+      <dl className="grid w-full gap-x-4 gap-y-2 rounded-xl border bg-background/60 p-4 text-left sm:grid-cols-[7rem_1fr] sm:p-5">
+        {sources.map((s) => (
+          <div key={s.label} className="contents">
+            <dt className="font-medium text-foreground/80">{s.label}</dt>
+            <dd className="mb-1.5 sm:mb-0">{s.body}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
