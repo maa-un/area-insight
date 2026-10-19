@@ -65,7 +65,22 @@ export type MapController = {
   destroy: () => void;
 };
 
-setWorkerUrl(workerUrl);
+// Worker はファイルの URL から起動すると、そのファイルの応答に付いた CSP に従う。ファイルはハッシュ付きで
+// ブラウザに長くキャッシュされるため、CSP を変えても古い CSP のままタイルの取得を拒み続ける（2026-10 に発生）。
+// 中身を取ってきて blob: の URL から起動し、毎回読み込むページ側の CSP に従わせる。
+// 取得できないときはこれまでどおりファイルの URL から起動する。
+let workerReady: Promise<void> | undefined;
+
+function prepareWorker(): Promise<void> {
+  workerReady ??= fetch(workerUrl)
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const source = await response.blob();
+      setWorkerUrl(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+    })
+    .catch(() => setWorkerUrl(workerUrl));
+  return workerReady;
+}
 
 async function loadBoundaries(): Promise<FeatureCollection> {
   const response = await fetch(boundariesUrl);
@@ -124,7 +139,7 @@ function skipLeaveTransition(): void {
   document.head.append(style);
 }
 
-export function createMap(
+export async function createMap(
   container: HTMLElement,
   options: {
     initial?: { center: LngLat; zoom: number };
@@ -135,6 +150,7 @@ export function createMap(
   },
 ): Promise<MapController> {
   skipLeaveTransition();
+  await prepareWorker();
   const initial = options.initial ?? JAPAN;
   const withAreas = options.areas !== false;
   const map = new MapLibreMap({
