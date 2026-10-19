@@ -4,7 +4,7 @@ import { dataset } from "@/data";
 // PropFolio（収支計算）へエリアの相場を渡すリンク。仕様書「PropFolio との相乗効果」。
 // 渡し方（パラメータ名と単位）は PropFolio 側と要調整（仕様書の未決事項）。決まるまでは仮の名前で渡す。
 // 値は元データの時点と一緒に渡し、PropFolio 側で古いデータを使っていると分かるようにする。
-const PROPFOLIO_URL = "https://propfolio.maa-un.com/";
+export const PROPFOLIO_URL = "https://propfolio.maa-un.com/";
 
 export function propfolioUrl(area: AreaMetrics): string {
   const url = new URL(PROPFOLIO_URL);
