@@ -11,6 +11,7 @@ export type Route =
   | { page: "rankings" }
   | { page: "compare" }
   | { page: "area"; detail: AreaDetail }
+  | { page: "guide" }
   | { page: "privacy" }
   | { page: "terms" }
   | { page: "version" }
@@ -18,6 +19,19 @@ export type Route =
   | { page: "unauthorized" };
 
 export type PageName = Route["page"];
+
+// ログインしなくても見られるページ。ほかはログインした人にだけ中身を見せる。
+const PUBLIC_PAGES: readonly PageName[] = [
+  "guide",
+
+  "privacy",
+  "terms",
+  "version",
+  "not-found",
+  "unauthorized",
+];
+
+export const isPublicPage = (page: PageName): boolean => PUBLIC_PAGES.includes(page);
 
 export const areaPath = (code: string) => `/areas/${code}/`;
 
@@ -48,8 +62,16 @@ export function pathOf(route: Route): string | undefined {
 
 const SITE = "マチノメ";
 
+type Head = { title: string; description: string; noindex?: true };
+
 // ページごとの title と description（SEO）。noindex のページは検索に載せず、sitemap にも入れない。
-export function headOf(route: Route): { title: string; description: string; noindex?: true } {
+// ログインが要るページは検索結果から開いても中身が見えないので、検索に載せない。
+export function headOf(route: Route): Head {
+  const head = baseHeadOf(route);
+  return isPublicPage(route.page) ? head : { ...head, noindex: true };
+}
+
+function baseHeadOf(route: Route): Head {
   switch (route.page) {
     case "home":
       return {
@@ -85,6 +107,12 @@ export function headOf(route: Route): { title: string; description: string; noin
         description: `${name}の中古戸建の取引価格、推移、空き家率、人口の推移を公的データで確認できます。`,
       };
     }
+    case "guide":
+      return {
+        title: `マチノメでできること | ${SITE}`,
+        description:
+          "市区町村ごとの中古戸建の相場・空き家率・人口の推移を、地図・ランキング・比較で調べられます。",
+      };
     case "privacy":
       return {
         title: `プライバシーポリシー | ${SITE}`,
@@ -114,6 +142,7 @@ export function allRoutes(detailOf: (code: string) => AreaDetail | undefined): R
     { page: "rankings" },
     { page: "compare" },
     ...areas,
+    { page: "guide" },
     { page: "privacy" },
     { page: "terms" },
     { page: "version" },
@@ -129,7 +158,9 @@ export function pageOfPath(pathname: string): { page: PageName; code?: string } 
   if (area) return { page: "area", code: area[1] };
   const name = path.slice(1, -1);
   if (name === "") return { page: "home" };
-  if (["map", "condos", "rankings", "compare", "privacy", "terms", "version"].includes(name)) {
+  if (
+    ["map", "condos", "rankings", "compare", "guide", "privacy", "terms", "version"].includes(name)
+  ) {
     return { page: name as PageName };
   }
   return { page: "not-found" };
