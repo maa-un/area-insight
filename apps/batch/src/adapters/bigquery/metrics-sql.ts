@@ -200,6 +200,9 @@ export function metricsSql(dataset: string): MetricsSql {
   const statistic = (name: string) =>
     `(SELECT area_code AS code, categories, time_code, SAFE_CAST(value AS FLOAT64) AS value
       FROM ${t("raw_statistics")} WHERE table_name = '${name}')`;
+  // 住宅・土地統計調査の「居住世帯の有無」の区分（cat01）ごとの住宅数。statistic() の行を市区町村ごとにまとめるときに使う
+  const housingCount = (cat01: string) =>
+    `MAX(IF(${prop("categories", "$.cat01")} = '${cat01}', value, NULL))`;
 
   // 土地（宅地(土地)）の取引の㎡単価。土地の指標と分布に使う。
   const lands = `
@@ -256,11 +259,17 @@ export function metricsSql(dataset: string): MetricsSql {
         APPROX_QUANTILES(change_rate, 100)[SAFE_OFFSET(50)] AS official_change_rate
       FROM ${t("land_price_points")} WHERE use = '${RESIDENTIAL_USE}' GROUP BY code
     ),
+    -- 空き家率と、放置空き家（賃貸・売却用及び二次的住宅を除く空き家）の率。どちらも住宅総数に対する割合
     vacancy AS (
-      SELECT code, SAFE_DIVIDE(
-        MAX(IF(${prop("categories", "$.cat01")} = '22', value, NULL)),
-        MAX(IF(${prop("categories", "$.cat01")} = '0', value, NULL))) * 100 AS vacancy_rate
+      SELECT code,
+        SAFE_DIVIDE(${housingCount("22")}, ${housingCount("0")}) * 100 AS vacancy_rate,
+        SAFE_DIVIDE(${housingCount("221")}, ${housingCount("0")}) * 100 AS other_vacancy_rate
       FROM ${statistic("housing_vacancy")} GROUP BY code
+    ),
+    -- 前回（5 年前）の調査の空き家率
+    vacancy_previous AS (
+      SELECT code, SAFE_DIVIDE(${housingCount("22")}, ${housingCount("0")}) * 100 AS vacancy_rate
+      FROM ${statistic("housing_vacancy_previous")} GROUP BY code
     ),
     rent AS (SELECT code, MAX(value) AS rent_per_sqm FROM ${statistic("private_rent_per_sqm")} GROUP BY code),
     population AS (
@@ -307,6 +316,9 @@ export function metricsSql(dataset: string): MetricsSql {
         ROUND(trade.trade_price) AS trade_price,
         IFNULL(trade.trade_count, 0) AS trade_count,
         ROUND(vacancy.vacancy_rate, 1) AS vacancy_rate,
+        ROUND(vacancy.other_vacancy_rate, 1) AS other_vacancy_rate,
+        -- 空き家率の増減（ポイント）。前回の調査と比べる
+        ROUND(vacancy.vacancy_rate - vacancy_previous.vacancy_rate, 1) AS vacancy_rate_change,
         population_change.population,
         ROUND(population_change.change_rate, 1) AS population_change_rate,
         projection.projected_population AS projected_population_${PROJECTION_TARGET_YEAR},
@@ -332,6 +344,7 @@ export function metricsSql(dataset: string): MetricsSql {
       LEFT JOIN land USING (code)
       LEFT JOIN official USING (code)
       LEFT JOIN vacancy USING (code)
+      LEFT JOIN vacancy_previous USING (code)
       LEFT JOIN rent USING (code)
       LEFT JOIN population_change USING (code)
       LEFT JOIN projection USING (code)
@@ -441,6 +454,17 @@ export function metricsSql(dataset: string): MetricsSql {
           FROM residential WHERE station_distance_m IS NOT NULL
         ) GROUP BY code, band
       ) GROUP BY code
+    ),
+    -- 空き家の内訳（住宅・土地統計調査の最新の調査、戸）
+    vacancy AS (
+      SELECT code,
+        CAST(${housingCount("0")} AS INT64) AS total,
+        CAST(${housingCount("22")} AS INT64) AS vacant,
+        CAST(${housingCount("222")} AS INT64) AS rental,
+        CAST(${housingCount("223")} AS INT64) AS sale,
+        CAST(${housingCount("224")} AS INT64) AS secondary,
+        CAST(${housingCount("221")} AS INT64) AS other
+      FROM ${statistic("housing_vacancy")} GROUP BY code
     )
     SELECT
       m.code,
@@ -450,7 +474,10 @@ export function metricsSql(dataset: string): MetricsSql {
       IFNULL(projection.population_projection, []) AS population_projection,
       IFNULL(recent.recent_transactions, []) AS recent_transactions,
       IF(official.code IS NULL, NULL, STRUCT(official.price, official.count)) AS official_land_price,
-      IFNULL(by_distance.bands, []) AS land_prices_by_station_distance
+      IFNULL(by_distance.bands, []) AS land_prices_by_station_distance,
+      IF(vacancy.total IS NULL OR vacancy.vacant IS NULL, NULL,
+        STRUCT(vacancy.total, vacancy.vacant, vacancy.rental, vacancy.sale, vacancy.secondary, vacancy.other))
+        AS vacancy_breakdown
     FROM ${t("raw_municipalities")} AS m
     LEFT JOIN quarters USING (code)
     LEFT JOIN years USING (code)
@@ -458,7 +485,8 @@ export function metricsSql(dataset: string): MetricsSql {
     LEFT JOIN population USING (code)
     LEFT JOIN projection USING (code)
     LEFT JOIN official USING (code)
-    LEFT JOIN by_distance USING (code)`;
+    LEFT JOIN by_distance USING (code)
+    LEFT JOIN vacancy USING (code)`;
 
   // 地価は種類（地価公示・地価調査）ごとに最新の年の地点を出す。地価調査は 9 月公表のため、
   // 今年の地価公示を取り込んだ後も、地価調査は前年のものを使う。area_metrics と area_details がこの表を読むため、先に作る。
@@ -704,7 +732,7 @@ export function metricsSql(dataset: string): MetricsSql {
 
   // 指標ごとの出典と時点（packages/shared の DataSources）。画面はすべての数字のそばに時点を出す。
   //   取引: 期間の最初の四半期の初日〜最新の四半期の末日（指標は直近 4 四半期、土地は 8 四半期）
-  //   住宅・土地統計調査: time_code の年の 10 月 1 日時点  住民基本台帳人口: 最新年の 1 月 1 日時点
+  //   住宅・土地統計調査: time_code の年の 10 月 1 日時点（空き家率の増減は前回と最新の調査の時点）  住民基本台帳人口: 最新年の 1 月 1 日時点
   //   地価公示・地価調査: land_price_points の価格の時点（取り込む前は NULL）
   //   駅ごとの取引: 取引時期を読んだ範囲（取引相場は直近 4 四半期、土地の坪単価は 8 四半期）
   //   マンションの成約事例: 取り込んだ期間（condo-transactions ジョブの --recent）
@@ -719,7 +747,8 @@ export function metricsSql(dataset: string): MetricsSql {
     ),
     survey AS (
       SELECT table_name, DATE(CAST(SUBSTR(MAX(time_code), 1, 4) AS INT64), 10, 1) AS as_of
-      FROM ${t("raw_statistics")} WHERE table_name IN ('housing_vacancy', 'private_rent_per_sqm')
+      FROM ${t("raw_statistics")}
+      WHERE table_name IN ('housing_vacancy', 'housing_vacancy_previous', 'private_rent_per_sqm')
       GROUP BY table_name
     ),
     population AS (
@@ -753,6 +782,11 @@ export function metricsSql(dataset: string): MetricsSql {
     FROM latest
     UNION ALL
     SELECT 'vacancyRate', 'housing_survey', NULL, NULL, as_of FROM survey WHERE table_name = 'housing_vacancy'
+    UNION ALL
+    -- 空き家率の増減: 前回の調査（period_from）と最新の調査（period_to）の時点
+    SELECT 'vacancyRateChange', 'housing_survey', previous.as_of, latest.as_of, NULL
+    FROM survey AS latest, survey AS previous
+    WHERE latest.table_name = 'housing_vacancy' AND previous.table_name = 'housing_vacancy_previous'
     UNION ALL
     SELECT 'monthlyRent', 'housing_survey', NULL, NULL, as_of FROM survey WHERE table_name = 'private_rent_per_sqm'
     UNION ALL

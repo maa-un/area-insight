@@ -42,6 +42,7 @@ import {
   metricPeriod,
   rankableAreas,
   sortAreas,
+  VACANCY_METRICS,
 } from "@/data";
 import { useAuth } from "@/lib/auth";
 import { formatMetric } from "@/lib/format";
@@ -123,8 +124,8 @@ export function RankingsPage() {
     // 表の先頭（固定の絞り込みバーの下）から見られるようにする
     tableRef.current?.scrollIntoView({ block: "start" });
   };
-  // 表の列は基本の指標。歪みの指標を選んだときは、その列を先頭に足す
-  const columns = isDistortionMetric(metric) ? [metric, ...BASIC_METRICS] : BASIC_METRICS;
+  // 表の列は基本の指標。空き家の詳しい指標や歪みの指標を選んだときは、その列を先頭に足す
+  const columns = BASIC_METRICS.includes(metric) ? BASIC_METRICS : [metric, ...BASIC_METRICS];
   const max = Math.max(...rows.map((a) => Math.abs(a[metric] ?? 0)), 0);
 
   return (
@@ -149,6 +150,14 @@ export function RankingsPage() {
               <SelectGroup>
                 <SelectLabel>指標</SelectLabel>
                 {BASIC_METRICS.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {METRICS[key].label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              <SelectGroup>
+                <SelectLabel>空き家</SelectLabel>
+                {VACANCY_METRICS.map((key) => (
                   <SelectItem key={key} value={key}>
                     {METRICS[key].label}
                   </SelectItem>

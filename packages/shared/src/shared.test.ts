@@ -73,6 +73,11 @@ describe("AreaMetricsFile", () => {
       sources: {
         tradePrice: period,
         vacancyRate: survey,
+        vacancyRateChange: {
+          source: "housing_survey",
+          period: { from: "2018-10-01", to: "2023-10-01" },
+          asOf: null,
+        },
         monthlyRent: survey,
         population: { source: "resident_register", period: null, asOf: "2026-01-01" },
         stations: { ...period, source: "XPT001" },
@@ -92,6 +97,8 @@ describe("AreaMetricsFile", () => {
           tradePrice: null,
           tradeCount: 0,
           vacancyRate: 12.3,
+          otherVacancyRate: 4.5,
+          vacancyRateChange: -0.8,
           population: 68000,
           populationChangeRate: 2.1,
           projectedPopulation2050: null,

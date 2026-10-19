@@ -4,9 +4,17 @@ import type { RawDataStore, StatisticRecord, StatisticsSource, StatisticsTable }
 // 調査が新しくなったら（住宅・土地統計調査は 5 年ごと）、ここの statsDataId を差し替える。
 export const STATISTICS_TABLES: readonly StatisticsTable[] = [
   {
-    // 令和5年住宅・土地統計調査「居住世帯の有無(8区分)別住宅数」。総数（0）と空き家（22）で空き家率を出す
+    // 令和5年住宅・土地統計調査「居住世帯の有無(8区分)別住宅数」。総数（0）と空き家（22）で空き家率を出す。
+    // 空き家の内訳: 賃貸・売却用及び二次的住宅を除く空き家（221、いわゆる放置空き家）・賃貸用（222）・売却用（223）・二次的住宅（224）
     id: "0004021421",
     name: "housing_vacancy",
+    filters: { cdCat01: "0,22,221,222,223,224" },
+  },
+  {
+    // 平成30年住宅・土地統計調査の同じ表。空き家率の 5 年の増減に使う。
+    // 内訳のコードの意味が令和5年と違う（221 二次的住宅・222 賃貸用・223 売却用・224 その他の住宅）ため、総数と空き家だけ取る
+    id: "0003355290",
+    name: "housing_vacancy_previous",
     filters: { cdCat01: "0,22" },
   },
   {

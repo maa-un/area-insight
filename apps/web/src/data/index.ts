@@ -10,6 +10,7 @@ import {
   formatDataPeriod,
   formatLandPriceAsOf,
   formatPopulationChange,
+  formatSurveyChange,
   STALE_NOTE,
   STALE_YEARS,
   yearsApart,
@@ -45,8 +46,9 @@ type MetricDefinition = {
   unit: string;
   // どちらが探す人にとって良い値か。比較画面の強調と、並べ替えの既定の向きに使う
   better: "low" | "high";
-  // basic: 公的データを集計した指標。distortion: 指標を組み合わせた市場の歪み（仕様書「市場の歪み指標」）
-  group: "basic" | "distortion";
+  // basic: 公的データを集計した指標。vacancy: 空き家の詳しい指標（ランキングの表には、選んだときだけ列を出す）。
+  // distortion: 指標を組み合わせた市場の歪み（仕様書「市場の歪み指標」）
+  group: "basic" | "vacancy" | "distortion";
 };
 
 // 並べ替え・比較・地図の塗り分けに使える指標。
@@ -68,6 +70,18 @@ export const METRICS = {
     unit: "%",
     better: "low",
     group: "basic",
+  },
+  otherVacancyRate: {
+    label: "放置空き家率",
+    unit: "%",
+    better: "low",
+    group: "vacancy",
+  },
+  vacancyRateChange: {
+    label: "空き家率の増減（5年）",
+    unit: "pt",
+    better: "low",
+    group: "vacancy",
   },
   populationChangeRate: {
     label: "人口増減率（5年）",
@@ -123,6 +137,9 @@ export type MetricKey = keyof typeof METRICS;
 export const BASIC_METRICS = (Object.keys(METRICS) as MetricKey[]).filter(
   (key) => METRICS[key].group === "basic",
 );
+export const VACANCY_METRICS = (Object.keys(METRICS) as MetricKey[]).filter(
+  (key) => METRICS[key].group === "vacancy",
+);
 export const DISTORTION_METRICS = (Object.keys(METRICS) as MetricKey[]).filter(
   (key) => METRICS[key].group === "distortion",
 );
@@ -143,7 +160,10 @@ export function metricPeriod(key: MetricKey): string {
     case "grossYield":
       return `家賃 ${formatDataPeriod(monthlyRent)}・取引 ${formatDataPeriod(tradePrice)}`;
     case "vacancyRate":
+    case "otherVacancyRate":
       return formatDataPeriod(vacancyRate);
+    case "vacancyRateChange":
+      return formatSurveyChange(dataset.sources.vacancyRateChange);
     case "populationChangeRate":
       return formatPopulationChange(population);
     case "population":

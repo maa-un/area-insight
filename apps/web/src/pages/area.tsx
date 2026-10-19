@@ -10,6 +10,7 @@ import { TrendChart, yearName } from "@/components/trend-chart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { VacancySection } from "@/components/vacancy";
 import {
   dataset,
   findArea,
@@ -149,6 +150,10 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
 
       <div className="reveal">
         <StationLandPriceSection areaName={area.name} stations={detail.stationLandPrices} />
+      </div>
+
+      <div className="reveal">
+        <VacancySection area={area} prefecture={prefecture} breakdown={detail.vacancyBreakdown} />
       </div>
 
       <div className="reveal">

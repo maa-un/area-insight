@@ -32,6 +32,12 @@ export function formatPopulationChange(data: DataPeriod, years = 5): string {
   return `${(y ?? 0) - years}年→${y}年（${m}月${d}日時点）`;
 }
 
+// 住宅・土地統計調査どうしの比較（空き家率の増減）。例: 「2018年→2023年調査」
+export function formatSurveyChange(data: DataPeriod): string {
+  if (data.period === null) return "時点不明";
+  return `${data.period.from.slice(0, 4)}年→${data.period.to.slice(0, 4)}年調査`;
+}
+
 // 2 つのデータの時点の差（年）。期間のデータは終わりの日で見る。
 export function yearsApart(a: DataPeriod, b: DataPeriod): number {
   const end = (data: DataPeriod) => Date.parse(data.period?.to ?? data.asOf ?? "");
