@@ -11,15 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  dataset,
-  findArea,
-  isMetricKey,
-  landPrices,
-  METRICS,
-  type MetricKey,
-  stations,
-} from "@/data";
+import { dataset, findArea, isMetricKey, METRICS, type MetricKey } from "@/data";
+import { loadLandPrices, loadStations } from "@/data/points";
 import { readStoredBasemap } from "@/lib/basemaps";
 import {
   formatCount,
@@ -50,8 +43,6 @@ const LAYERS: { id: MapLayerId; label: string; swatch: string }[] = [
   { id: "stations", label: "駅ごとの取引相場", swatch: STATION_COLOR },
 ];
 
-const landScale = quantileScale(landPrices.map((p) => p.price));
-
 export function MapPage() {
   const params = useSearchParams();
   const metricParam = params.get("metric");
@@ -65,6 +56,7 @@ export function MapPage() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [ready, setReady] = useState(false);
   const [areasStatus, setAreasStatus] = useState<"loading" | "loaded" | "failed">("loading");
+  const [pointsStatus, setPointsStatus] = useState<"loading" | "loaded" | "failed">("loading");
   const container = useRef<HTMLDivElement>(null);
   const controller = useRef<MapController | null>(null);
 
@@ -77,6 +69,8 @@ export function MapPage() {
     if (!node) return;
     const focus = findArea(new URLSearchParams(window.location.search).get("area") ?? "");
     let cancelled = false;
+    // 地点のデータは大きいので、地図の部品の読み込みと並べて取りに行く
+    const points = Promise.all([loadLandPrices(), loadStations()]);
     void import("@/lib/map-engine").then(async ({ createMap }) => {
       const map = await createMap(node, {
         initial: focus?.center ? { center: focus.center, zoom: 10 } : undefined,
@@ -92,23 +86,37 @@ export function MapPage() {
         () => !cancelled && setAreasStatus("loaded"),
         () => !cancelled && setAreasStatus("failed"),
       );
-      map.setPoints(
-        "land",
-        landPrices.map((p) => ({
-          coordinates: p.coordinates,
-          properties: { ...p, coordinates: null, color: landScale.colorOf(p.price) },
-        })),
-      );
-      map.setPoints(
-        "stations",
-        stations.map((s) => ({
-          coordinates: s.coordinates,
-          // 地図の属性に配列を入れると押したときに JSON 文字列で返るため、路線名は表示用の文字列にしておく
-          properties: { ...s, coordinates: null, lineNames: null, lines: formatLines(s.lineNames) },
-        })),
-      );
       if (focus) setSelection({ layer: "areas", properties: { code: focus.code } });
       setReady(true);
+      // 地点が届く前でも、市区町村の塗り分けは使える
+      points.then(
+        ([landPrices, stations]) => {
+          if (cancelled) return;
+          const landScale = quantileScale(landPrices.map((p) => p.price));
+          map.setPoints(
+            "land",
+            landPrices.map((p) => ({
+              coordinates: p.coordinates,
+              properties: { ...p, coordinates: null, color: landScale.colorOf(p.price) },
+            })),
+          );
+          map.setPoints(
+            "stations",
+            stations.map((s) => ({
+              coordinates: s.coordinates,
+              // 地図の属性に配列を入れると押したときに JSON 文字列で返るため、路線名は表示用の文字列にしておく
+              properties: {
+                ...s,
+                coordinates: null,
+                lineNames: null,
+                lines: formatLines(s.lineNames),
+              },
+            })),
+          );
+          setPointsStatus("loaded");
+        },
+        () => !cancelled && setPointsStatus("failed"),
+      );
     });
     return () => {
       cancelled = true;
@@ -215,24 +223,53 @@ export function MapPage() {
             </span>
           </div>
         )}
-        {ready && areasStatus !== "loaded" && visible.areas && (
-          <p
-            className="absolute top-3 left-3 flex items-center rounded-full border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur animate-in fade-in slide-in-from-top-2"
-            role="status"
-          >
-            {areasStatus === "loading" ? (
-              <>
-                <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
-                市区町村の境界を読み込んでいます
-              </>
-            ) : (
-              "市区町村の境界を読み込めませんでした。再読み込みしてください"
+        {ready && (
+          <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5">
+            {areasStatus !== "loaded" && visible.areas && (
+              <MapStatus
+                loading={areasStatus === "loading"}
+                loadingText="市区町村の境界を読み込んでいます"
+                failedText="市区町村の境界を読み込めませんでした。再読み込みしてください"
+              />
             )}
-          </p>
+            {pointsStatus !== "loaded" && (visible.land || visible.stations) && (
+              <MapStatus
+                loading={pointsStatus === "loading"}
+                loadingText="地価の地点と駅の相場を読み込んでいます"
+                failedText="地価の地点と駅の相場を読み込めませんでした。再読み込みしてください"
+              />
+            )}
+          </div>
         )}
         {ready && controller.current && <BasemapSwitcher map={controller.current} />}
       </div>
     </div>
+  );
+}
+
+function MapStatus({
+  loading,
+  loadingText,
+  failedText,
+}: {
+  loading: boolean;
+  loadingText: string;
+  failedText: string;
+}) {
+  return (
+    <p
+      className="flex items-center rounded-full border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur animate-in fade-in slide-in-from-top-2"
+      role="status"
+    >
+      {loading ? (
+        <>
+          <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden />
+          {loadingText}
+        </>
+      ) : (
+        failedText
+      )}
+    </p>
   );
 }
 
