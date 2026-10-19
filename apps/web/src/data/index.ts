@@ -1,10 +1,8 @@
 import {
   type AreaMetrics,
   AreaMetricsFile,
-  LandPricePoints,
   type MunicipalityCode,
   RELIABLE_TRADE_COUNT,
-  StationMetricsList,
 } from "@area-insight/shared";
 import {
   formatDataPeriod,
@@ -15,24 +13,19 @@ import {
   STALE_YEARS,
   yearsApart,
 } from "@/lib/period";
-import { sampleLandPrices, sampleMetrics, sampleStations } from "./sample";
+import { sampleMetrics } from "./sample";
 
 // 画面が使うデータの入口。ビルド前に scripts/prepare-data.mjs が集計ジョブの書き出しを
 // src/data/generated/ に置いていればそれを使い、無ければサンプルデータを使う。
 // どちらの場合も同じ zod スキーマで検証し、形が違えばビルドを失敗させる。
-const generated = import.meta.glob<unknown>("./generated/*.json", {
+// ここで読むものは全ページの JavaScript に入るため、地図だけで使う地点のデータは points.ts で別に取る。
+const generated = import.meta.glob<unknown>("./generated/metrics.json", {
   eager: true,
   import: "default",
 });
 
 export const dataset = AreaMetricsFile.parse(
   generated["./generated/metrics.json"] ?? sampleMetrics,
-);
-export const landPrices = LandPricePoints.parse(
-  generated["./generated/land-prices.json"] ?? sampleLandPrices,
-);
-export const stations = StationMetricsList.parse(
-  generated["./generated/stations.json"] ?? sampleStations,
 );
 
 const byCode = new Map(dataset.areas.map((area) => [area.code, area]));
