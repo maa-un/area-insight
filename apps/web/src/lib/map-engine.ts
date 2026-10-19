@@ -74,6 +74,18 @@ function collection(features: Feature[]): FeatureCollection {
   };
 }
 
+// ページ移動の切り替え（styles.css の @view-transition）は、移る前のページの見た目を写し取ってから動かす。
+// 地図（WebGL の canvas）のあるページでは写し取れず、ブラウザが切り替えを飛ばして
+// 「Uncaught (in promise) AbortError: Transition was skipped」を出す（2026-10、Chrome で確認）。
+// 地図を作ったページだけ、離れるときの切り替えをやめる。地図のページへ入るときは地図がまだ無いので、これまでどおり動く。
+function skipLeaveTransition(): void {
+  if (document.getElementById("no-leave-transition")) return;
+  const style = document.createElement("style");
+  style.id = "no-leave-transition";
+  style.textContent = "@view-transition { navigation: none; }";
+  document.head.append(style);
+}
+
 export function createMap(
   container: HTMLElement,
   options: {
@@ -83,6 +95,7 @@ export function createMap(
     areas?: boolean;
   },
 ): Promise<MapController> {
+  skipLeaveTransition();
   const initial = options.initial ?? JAPAN;
   const withAreas = options.areas !== false;
   const map = new MapLibreMap({
