@@ -1,6 +1,7 @@
 import { prefectureName } from "@area-insight/shared";
 import { ArrowRight, Loader2, MapIcon, MousePointerClick } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BasemapSwitcher } from "@/components/basemap-switcher";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -19,6 +20,7 @@ import {
   type MetricKey,
   stations,
 } from "@/data";
+import { readStoredBasemap } from "@/lib/basemaps";
 import {
   formatCount,
   formatDate,
@@ -79,6 +81,7 @@ export function MapPage() {
       const map = await createMap(node, {
         initial: focus?.center ? { center: focus.center, zoom: 10 } : undefined,
         onSelect: setSelection,
+        basemap: readStoredBasemap(),
       });
       if (cancelled) {
         map.destroy();
@@ -227,6 +230,7 @@ export function MapPage() {
             )}
           </p>
         )}
+        {ready && controller.current && <BasemapSwitcher map={controller.current} />}
       </div>
     </div>
   );
