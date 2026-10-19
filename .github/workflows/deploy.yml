@@ -102,11 +102,16 @@ jobs:
             --project "${GCP_PROJECT_ID}"
 
   # package.json の version のタグがまだ無いときだけリリースする。版を上げない PR のマージでは何もしない。
+  # git にタグが無くても、Artifact Registry に同じタグのイメージが既にあれば（手元から push した場合など）
+  # 上書きせずに失敗させて知らせる。画面のデプロイ（web）はこのジョブに依存しないので止まらない。
   version:
     name: version
     needs: check
     if: github.event_name != 'repository_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       release: ${{ steps.version.outputs.release }}
@@ -131,6 +136,44 @@ jobs:
           else
             echo "release=true" >> "${GITHUB_OUTPUT}"
           fi
+
+      - name: Authenticate to Google Cloud
+        if: steps.version.outputs.release == 'true'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - if: steps.version.outputs.release == 'true'
+        uses: google-github-actions/setup-gcloud@v3
+
+      # イメージを push する前に、両方のリポジトリに同じタグが無いことを確かめる。
+      # 片方でもあれば何も push しない（タグの付いたイメージを別のコミットから作り直さない）。
+      # 一覧を取れないとき（権限など）も、あると見なして止める。
+      - name: Check existing images
+        if: steps.version.outputs.release == 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY_PREFIX }}
+        run: |
+          set -euo pipefail
+          existing=()
+          for app in api batch; do
+            image="${REGISTRY}-${app}/${app}"
+            tags=$(gcloud artifacts docker tags list "${image}" --format="value(tag.basename())")
+            if grep -qxF "${TAG}" <<<"${tags}"; then
+              existing+=("${image}:${TAG}")
+            fi
+          done
+          if [ "${#existing[@]}" -gt 0 ]; then
+            for ref in "${existing[@]}"; do
+              echo "::error::${ref} は既に Artifact Registry にあるが、git に ${TAG} のタグが無い。上書きしないため push しない"
+            done
+            echo "::error::この内容を出すなら package.json の version を上げる。既存のイメージをどう扱うかは人が決める"
+            exit 1
+          fi
+          echo "${TAG} のイメージはまだ無いため、push してリリースする"
 
   images:
     name: image (${{ matrix.app }})
