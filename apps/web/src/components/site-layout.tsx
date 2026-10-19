@@ -287,6 +287,8 @@ function SiteFooter() {
 //   不動産情報ライブラリ: 利用規約「コンテンツの利用に係るPDL1.0に関する重要情報」と API 利用規約 第 7 条
 //   e-Stat: API 機能のクレジット表示（https://www.e-stat.go.jp/api/api-info/credit）
 //   地理院タイル: 国土地理院の地理院タイル利用規約
+//   背景の地図（建物）: OpenFreeMap のタイル。© OpenMapTiles と © OpenStreetMap contributors（ODbL）を示す。
+//     タイルごとの細かな出所（VMAP0、Landsat8 など）は地図の右下の出典に出す
 //   国土数値情報（駅別乗降客数）: 不動産情報ライブラリの API（XKT015）から取得するため、同ライブラリの出典に含まれる。
 //     どのデータで駅名を付けたかが分かるよう、取引価格の作成の注記に添える
 //   国土数値情報（行政区域）: CC BY 4.0（PDL1.0 の追加記載例どおり、加工したことと作成者を示す）
@@ -310,7 +312,21 @@ function Credits() {
         >
           地理院タイル
         </a>
-        （国土地理院）
+        （国土地理院）、
+        <a className={link} href="https://openfreemap.org/" target="_blank" rel="noopener">
+          OpenFreeMap
+        </a>{" "}
+        <a className={link} href="https://www.openmaptiles.org/" target="_blank" rel="noopener">
+          © OpenMapTiles
+        </a>{" "}
+        <a
+          className={link}
+          href="https://www.openstreetmap.org/copyright"
+          target="_blank"
+          rel="noopener"
+        >
+          © OpenStreetMap contributors
+        </a>
       </p>
       <p>
         取引価格の中央値・推移・想定利回りは「不動産取引価格情報」（国土交通省）をもとに合同会社Maa'un

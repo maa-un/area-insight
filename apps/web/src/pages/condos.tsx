@@ -9,6 +9,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BasemapSwitcher } from "@/components/basemap-switcher";
 import { Pager } from "@/components/pager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { dataset } from "@/data";
 import { condoPrefectures, loadCondos } from "@/data/condos";
+import { readStoredBasemap } from "@/lib/basemaps";
 import {
   type CondoFilters,
   DEFAULT_FILTERS,
@@ -119,6 +121,7 @@ export function CondosPage() {
     void import("@/lib/map-engine").then(async ({ createMap }) => {
       const map = await createMap(node, {
         areas: false,
+        basemap: readStoredBasemap(),
         onSelect: (selection) => {
           if (selection?.layer === "condos") setSelected(Number(selection.properties.station));
         },
@@ -314,6 +317,7 @@ export function CondosPage() {
             <p className="mt-1.5 text-muted-foreground">万円/坪・円の大きさは件数</p>
           </div>
         ) : null}
+        {ready && controller.current && <BasemapSwitcher map={controller.current} />}
       </div>
     </div>
   );
