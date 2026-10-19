@@ -52,6 +52,19 @@ describe("metricsSql", () => {
     expect(sources).toContain("'prefectureLandPrice', 'prefecture_land_price'");
   });
 
+  it("compares the vacancy rate with the previous housing survey", () => {
+    const metrics = table("area_metrics");
+    expect(metrics).toContain("WHERE table_name = 'housing_vacancy_previous'");
+    expect(metrics).toContain("AS other_vacancy_rate");
+    expect(metrics).toContain(
+      "vacancy.vacancy_rate - vacancy_previous.vacancy_rate, 1) AS vacancy_rate_change",
+    );
+    expect(table("area_details")).toContain("AS vacancy_breakdown");
+    expect(table("data_sources")).toContain(
+      "'vacancyRateChange', 'housing_survey', previous.as_of, latest.as_of",
+    );
+  });
+
   it("only counts detached houses (land and building)", () => {
     expect(table("area_metrics")).toContain("type = '宅地(土地と建物)'");
   });

@@ -71,6 +71,12 @@ export function formatPercent(value: number | null, { signed = false } = {}): st
   return `${sign}${decimal.format(value)}%`;
 }
 
+// ポイントの増減。「+1.4pt」のように小数 1 桁で、増えたときは + を付ける。
+export function formatPoint(value: number | null): string {
+  if (value === null) return NO_DATA;
+  return `${value > 0 ? "+" : ""}${decimal.format(value)}pt`;
+}
+
 export function formatCount(value: number | null, unit: string): string {
   return value === null ? NO_DATA : `${integer.format(value)}${unit}`;
 }
@@ -105,6 +111,8 @@ export function formatMetric(key: string, value: number | null): string {
     case "populationChangeRate":
     case "projectedChangeRate":
       return formatPercent(value, { signed: true });
+    case "vacancyRateChange":
+      return formatPoint(value);
     case "landUnitPrice":
       return formatManYenPerTsubo(value);
     case "landToOfficialRatio":

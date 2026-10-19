@@ -29,6 +29,10 @@ export const AreaMetrics = z.object({
   tradeCount: z.number().int().nonnegative(),
   // 空き家数 ÷ 住宅総数（%）
   vacancyRate: z.number().min(0).max(100).nullable(),
+  // 放置空き家（賃貸・売却用及び二次的住宅を除く空き家）÷ 住宅総数（%）
+  otherVacancyRate: z.number().min(0).max(100).nullable(),
+  // 空き家率の増減（ポイント）。前回の住宅・土地統計調査（5 年前）と比べる
+  vacancyRateChange: z.number().min(-100).max(100).nullable(),
   population: z.number().int().nonnegative().nullable(),
   // 過去 5 年の人口増減率（%）
   populationChangeRate: z.number().nullable(),
@@ -69,7 +73,7 @@ export type AreaMetrics = z.infer<typeof AreaMetrics>;
 
 // 指標の元データ。画面はすべての数字のそばに「いつ時点のデータか」を出す（仕様書「時点の表示ルール」）。
 //   XIT001: 不動産取引価格情報（市区町村の取引）  XPT001: 同（地点。駅ごとの取引相場）
-//   housing_survey: 住宅・土地統計調査（空き家率・家賃。5 年ごと、10 月 1 日時点）
+//   housing_survey: 住宅・土地統計調査（空き家率・家賃。5 年ごと、10 月 1 日時点。空き家率の増減は period に前回と最新の調査の時点）
 //   resident_register: 住民基本台帳人口（1 月 1 日時点）
 //   official_land_price: 地価公示（1 月 1 日時点）  prefecture_land_price: 都道府県地価調査（基準地価、7 月 1 日時点）
 //   ipss_projection: 社人研「日本の地域別将来推計人口」（asOf は推計の年。2020 年国勢調査を基に 2050 年まで）
@@ -95,7 +99,8 @@ export type DataPeriod = z.infer<typeof DataPeriod>;
 // 指標ごとの出典と時点。市区町村ごとに繰り返さず、ファイルの頭に 1 つ置く。
 export const DataSources = z.object({
   tradePrice: DataPeriod, // 取引価格と件数、推移の最新の四半期
-  vacancyRate: DataPeriod,
+  vacancyRate: DataPeriod, // 空き家率・放置空き家の率・空き家の内訳
+  vacancyRateChange: DataPeriod, // 前回の調査（period.from）と最新の調査（period.to）の時点
   monthlyRent: DataPeriod, // 家賃の ㎡単価の時点。延床面積は tradePrice の期間の取引から
   population: DataPeriod, // 人口と 5 年増減率の「最新年」
   stations: DataPeriod, // 駅ごとの取引相場（直近 4 四半期）
@@ -206,6 +211,18 @@ export const AreaDetail = z.object({
   officialLandPrices: OfficialLandPrices,
   // この市区町村で取引された土地の、最寄り駅ごとの坪単価の目安（取引の多い順）
   stationLandPrices: z.array(StationLandPrice),
+  // 空き家の内訳（住宅・土地統計調査の最新の調査、戸）。調査の対象外（人口 1 万 5 千人未満の町村）は null。
+  // 内訳の各値は、表に値が無ければ null
+  vacancyBreakdown: z
+    .object({
+      total: z.number().int().nonnegative(), // 住宅総数
+      vacant: z.number().int().nonnegative(), // 空き家
+      rental: z.number().int().nonnegative().nullable(), // 賃貸用
+      sale: z.number().int().nonnegative().nullable(), // 売却用
+      secondary: z.number().int().nonnegative().nullable(), // 二次的住宅（別荘など）
+      other: z.number().int().nonnegative().nullable(), // 賃貸・売却用及び二次的住宅を除く空き家（放置空き家）
+    })
+    .nullable(),
   // 直近の取引（新しい順）
   recentTransactions: z.array(
     z.object({

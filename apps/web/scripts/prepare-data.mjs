@@ -24,6 +24,7 @@ const OPTIONAL_TABLES = ["condo_transactions"];
 // 版の古い集計ジョブの書き出しに無い出典の行。無ければ「時点不明」として補う（画面の検証がすべてのキーを求めるため）。
 const DEFAULT_SOURCES = {
   condoTrade: { source: "XPT001", period: null, asOf: null },
+  vacancyRateChange: { source: "housing_survey", period: null, asOf: null },
 };
 
 // BigQuery の JSON 書き出しは INT64 を文字列にするため、数値に戻す。
@@ -196,6 +197,19 @@ export function officialLandPricesOf(row) {
   };
 }
 
+// 空き家の内訳。版の古い集計ジョブの書き出しや、調査の対象外の市区町村は null。
+export function vacancyBreakdownOf(value) {
+  if (!value || value.total === null || value.vacant === null) return null;
+  return {
+    total: num(value.total),
+    vacant: num(value.vacant),
+    rental: num(value.rental),
+    sale: num(value.sale),
+    secondary: num(value.secondary),
+    other: num(value.other),
+  };
+}
+
 export function convert(
   {
     data_sources,
@@ -227,6 +241,8 @@ export function convert(
         tradePrice: num(row.trade_price),
         tradeCount: num(row.trade_count) ?? 0,
         vacancyRate: num(row.vacancy_rate),
+        otherVacancyRate: num(row.other_vacancy_rate),
+        vacancyRateChange: num(row.vacancy_rate_change),
         population: num(row.population),
         populationChangeRate: num(row.population_change_rate),
         projectedPopulation2050: num(row.projected_population_2050),
@@ -270,6 +286,7 @@ export function convert(
         year: num(p.year),
         population: num(p.population),
       })),
+      vacancyBreakdown: vacancyBreakdownOf(row.vacancy_breakdown),
       recentTransactions: (row.recent_transactions ?? []).map((t) => ({
         period: t.period,
         district: t.district ?? "",

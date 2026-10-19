@@ -446,6 +446,11 @@ const SEEDS: Seed[] = [
 export const SAMPLE_UPDATED_AT = "2026-10-16";
 const SAMPLE_TRADE_PERIOD = { from: "2025-10-01", to: "2026-09-30" };
 const SAMPLE_SURVEY = { source: "housing_survey", period: null, asOf: "2023-10-01" } as const;
+const SAMPLE_SURVEY_CHANGE = {
+  source: "housing_survey",
+  period: { from: "2018-10-01", to: "2023-10-01" },
+  asOf: null,
+} as const;
 const SAMPLE_LAND_PERIOD = { from: "2024-10-01", to: "2026-09-30" };
 // マンションの成約事例は 5 年分（QUARTERS と同じ 2021Q4〜2026Q3）
 const SAMPLE_CONDO_PERIOD = { from: "2021-10-01", to: "2026-09-30" };
@@ -512,6 +517,9 @@ function metricsFor(seed: Seed): Unranked {
     tradePrice: seed.price,
     tradeCount,
     vacancyRate: seed.vacancy,
+    // 放置空き家は空き家の 3〜5 割。空き家率の増減は人口が減る所ほど大きくする
+    otherVacancyRate: round(seed.vacancy * (0.3 + rand() * 0.2), 1),
+    vacancyRateChange: round(-seed.trend / 3 + (rand() - 0.5) * 2, 1),
     population: seed.population,
     populationChangeRate: seed.trend,
     projectedPopulation2050: projected,
@@ -582,6 +590,7 @@ export const sampleMetrics: AreaMetricsFile = {
   sources: {
     tradePrice: { source: "XIT001", period: SAMPLE_TRADE_PERIOD, asOf: null },
     vacancyRate: SAMPLE_SURVEY,
+    vacancyRateChange: SAMPLE_SURVEY_CHANGE,
     monthlyRent: SAMPLE_SURVEY,
     population: { source: "resident_register", period: null, asOf: "2026-01-01" },
     stations: { source: "XPT001", period: SAMPLE_TRADE_PERIOD, asOf: null },
@@ -715,6 +724,22 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     };
   }).sort((a, b) => b.count - a.count);
 
+  // 空き家の内訳。住宅は 2 人に 1 戸の目安で置き、放置空き家の残りを賃貸用・売却用・二次的住宅に分ける
+  const total = round(seed.population / 2, -1);
+  const vacant = round((total * (metrics.vacancyRate ?? 0)) / 100, -1);
+  const other = Math.min(vacant, round((total * (metrics.otherVacancyRate ?? 0)) / 100, -1));
+  const rest = vacant - other;
+  const sale = round(rest * 0.07, -1);
+  const secondary = round(rest * 0.05, -1);
+  const vacancyBreakdown = {
+    total,
+    vacant,
+    rental: rest - sale - secondary,
+    sale,
+    secondary,
+    other,
+  };
+
   return {
     code,
     quarters,
@@ -724,6 +749,7 @@ export function sampleDetail(code: string): AreaDetail | undefined {
     landPrices,
     officialLandPrices,
     stationLandPrices,
+    vacancyBreakdown,
     recentTransactions,
   };
 }

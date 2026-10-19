@@ -111,6 +111,8 @@ const exportRows = {
       trade_price: 1880,
       trade_count: "35",
       vacancy_rate: 13.9,
+      other_vacancy_rate: 6.2,
+      vacancy_rate_change: 1.4,
       population: "234111",
       population_change_rate: -2.6,
       gross_yield: 6.1,
@@ -168,6 +170,14 @@ const exportRows = {
           building_year: "1998",
         },
       ],
+      vacancy_breakdown: {
+        total: "118000",
+        vacant: "16400",
+        rental: "8100",
+        sale: "500",
+        secondary: "500",
+        other: "7300",
+      },
       official_land_price: { price: "80000", count: "14" },
       land_prices_by_station_distance: [
         { band: "within10", price: "110000", count: "3" },
@@ -318,7 +328,15 @@ describe("prepare-data", () => {
       period: null,
       asOf: "2023-10-01",
     });
+    // 前回の調査を取り込む前の書き出しには空き家率の増減の行が無い。時点不明として補う
+    expect(metrics.sources.vacancyRateChange).toEqual({
+      source: "housing_survey",
+      period: null,
+      asOf: null,
+    });
     expect(metrics.areas[0]).toMatchObject({
+      otherVacancyRate: 6.2,
+      vacancyRateChange: 1.4,
       population: 234111,
       tradeCount: 35,
       landUnitPrice: 52000,
@@ -343,6 +361,15 @@ describe("prepare-data", () => {
       officialByStationDistance: [{ band: "within20", price: 64000, count: 2 }],
     });
     expect(AreaDetail.parse(data.details[1]).stationLandPrices).toEqual([]);
+    expect(detail.vacancyBreakdown).toEqual({
+      total: 118000,
+      vacant: 16400,
+      rental: 8100,
+      sale: 500,
+      secondary: 500,
+      other: 7300,
+    });
+    expect(AreaDetail.parse(data.details[1]).vacancyBreakdown).toBeNull();
 
     expect(AreaDetail.parse(data.details[0]).recentTransactions[0]?.buildingYear).toBe(1998);
     expect(AreaDetail.parse(data.details[0]).populationProjection).toEqual([

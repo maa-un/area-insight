@@ -9,6 +9,8 @@ const base: AreaMetrics = {
   tradePrice: 2500,
   tradeCount: 206,
   vacancyRate: 13.9,
+  otherVacancyRate: null,
+  vacancyRateChange: null,
   population: 234111,
   populationChangeRate: -1.9,
   projectedPopulation2050: null,
