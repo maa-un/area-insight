@@ -19,6 +19,17 @@ export type Route =
 
 export type PageName = Route["page"];
 
+// ログインしなくても見られるページ。ほかはログインした人にだけ中身を見せる。
+const PUBLIC_PAGES: readonly PageName[] = [
+  "privacy",
+  "terms",
+  "version",
+  "not-found",
+  "unauthorized",
+];
+
+export const isPublicPage = (page: PageName): boolean => PUBLIC_PAGES.includes(page);
+
 export const areaPath = (code: string) => `/areas/${code}/`;
 
 export const comparePath = (codes: readonly string[]) =>
@@ -48,8 +59,16 @@ export function pathOf(route: Route): string | undefined {
 
 const SITE = "マチノメ";
 
+type Head = { title: string; description: string; noindex?: true };
+
 // ページごとの title と description（SEO）。noindex のページは検索に載せず、sitemap にも入れない。
-export function headOf(route: Route): { title: string; description: string; noindex?: true } {
+// ログインが要るページは検索結果から開いても中身が見えないので、検索に載せない。
+export function headOf(route: Route): Head {
+  const head = baseHeadOf(route);
+  return isPublicPage(route.page) ? head : { ...head, noindex: true };
+}
+
+function baseHeadOf(route: Route): Head {
   switch (route.page) {
     case "home":
       return {

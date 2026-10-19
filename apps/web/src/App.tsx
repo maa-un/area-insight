@@ -1,3 +1,4 @@
+import { SignInGate } from "@/components/sign-in-gate";
 import { SiteLayout } from "@/components/site-layout";
 import { AreaPage } from "@/pages/area";
 import { ComparePage } from "@/pages/compare";
@@ -7,12 +8,18 @@ import { NotFoundPage, PrivacyPage, TermsPage, UnauthorizedPage } from "@/pages/
 import { MapPage } from "@/pages/map";
 import { RankingsPage } from "@/pages/rankings";
 import { VersionPage } from "@/pages/version";
-import type { Route } from "@/routes";
+import { isPublicPage, type Route } from "@/routes";
 
 export function App({ route }: { route: Route }) {
   return (
     <SiteLayout page={route.page} wide={route.page === "map" || route.page === "condos"}>
-      <Page route={route} />
+      {isPublicPage(route.page) ? (
+        <Page route={route} />
+      ) : (
+        <SignInGate>
+          <Page route={route} />
+        </SignInGate>
+      )}
     </SiteLayout>
   );
 }
