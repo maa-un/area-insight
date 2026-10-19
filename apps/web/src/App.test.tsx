@@ -1,4 +1,6 @@
+import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { SignInGateView } from "./components/sign-in-gate";
 import { dataset } from "./data";
 import { pages, render } from "./entry-server";
 import { pageOfPath } from "./routes";
@@ -32,6 +34,7 @@ describe("prerender", () => {
     expect(render(find("map").route)).toContain("地図を読み込んでいます");
     expect(render(find("condos").route)).toContain("マンションの成約事例");
     expect(render(find("privacy").route)).toContain("プライバシーポリシー");
+    expect(render(find("guide").route)).toContain("マチノメでできること");
   });
 
   it("renders the deployed version without listing it for search", () => {
@@ -62,5 +65,26 @@ describe("pageOfPath", () => {
     expect(pageOfPath("/version")).toEqual({ page: "version" });
     expect(pageOfPath("/areas/13101/")).toEqual({ page: "area", code: "13101" });
     expect(pageOfPath("/nope/")).toEqual({ page: "not-found" });
+  });
+});
+
+describe("sign-in gate", () => {
+  const gated = (status: Parameters<typeof SignInGateView>[0]["status"]) =>
+    renderToString(<SignInGateView status={status}>中身</SignInGateView>);
+
+  it("shows the page only to signed-in users", () => {
+    expect(gated("signed-in")).toContain("中身");
+    expect(gated("disabled")).toContain("中身");
+    expect(gated("loading")).not.toContain("中身");
+    const signedOut = gated("signed-out");
+    expect(signedOut).not.toContain("中身");
+    expect(signedOut).toContain("ログインしてご利用ください");
+  });
+
+  it("keeps pages behind the sign-in out of search, but not the legal pages", () => {
+    for (const { route, head } of pages()) {
+      const open = ["guide", "privacy", "terms", "not-found", "unauthorized"].includes(route.page);
+      expect(head.noindex === true, route.page).toBe(!open);
+    }
   });
 });

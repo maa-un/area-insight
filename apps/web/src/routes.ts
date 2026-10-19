@@ -10,6 +10,7 @@ export type Route =
   | { page: "condos" }
   | { page: "rankings" }
   | { page: "compare" }
+  | { page: "guide" }
   | { page: "area"; detail: AreaDetail }
   | { page: "privacy" }
   | { page: "terms" }
@@ -18,6 +19,18 @@ export type Route =
   | { page: "unauthorized" };
 
 export type PageName = Route["page"];
+
+// ログインしなくても見られるページ。ほかはログインした人にだけ中身を見せる。
+const PUBLIC_PAGES: readonly PageName[] = [
+  "guide",
+  "privacy",
+  "terms",
+  "version",
+  "not-found",
+  "unauthorized",
+];
+
+export const isPublicPage = (page: PageName): boolean => PUBLIC_PAGES.includes(page);
 
 export const areaPath = (code: string) => `/areas/${code}/`;
 
@@ -48,8 +61,16 @@ export function pathOf(route: Route): string | undefined {
 
 const SITE = "マチノメ";
 
+type Head = { title: string; description: string; noindex?: true };
+
 // ページごとの title と description（SEO）。noindex のページは検索に載せず、sitemap にも入れない。
-export function headOf(route: Route): { title: string; description: string; noindex?: true } {
+// ログインが要るページは検索結果から開いても中身が見えないので、検索に載せない。
+export function headOf(route: Route): Head {
+  const head = baseHeadOf(route);
+  return isPublicPage(route.page) ? head : { ...head, noindex: true };
+}
+
+function baseHeadOf(route: Route): Head {
   switch (route.page) {
     case "home":
       return {
@@ -76,6 +97,12 @@ export function headOf(route: Route): { title: string; description: string; noin
       return {
         title: `比較 | ${SITE}`,
         description: "気になる市区町村を 3 つまで横に並べて比べられます。",
+      };
+    case "guide":
+      return {
+        title: `使い方 | ${SITE}`,
+        description:
+          "マチノメで調べられること（取引価格・土地の値段・空き家・人口・マンションの成約事例）と、地図・ランキング・比較の使い方をまとめています。",
       };
     case "area": {
       const area = findArea(route.detail.code);
@@ -113,6 +140,7 @@ export function allRoutes(detailOf: (code: string) => AreaDetail | undefined): R
     { page: "condos" },
     { page: "rankings" },
     { page: "compare" },
+    { page: "guide" },
     ...areas,
     { page: "privacy" },
     { page: "terms" },
@@ -129,7 +157,9 @@ export function pageOfPath(pathname: string): { page: PageName; code?: string } 
   if (area) return { page: "area", code: area[1] };
   const name = path.slice(1, -1);
   if (name === "") return { page: "home" };
-  if (["map", "condos", "rankings", "compare", "privacy", "terms", "version"].includes(name)) {
+  if (
+    ["map", "condos", "rankings", "compare", "guide", "privacy", "terms", "version"].includes(name)
+  ) {
     return { page: name as PageName };
   }
   return { page: "not-found" };
