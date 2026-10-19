@@ -3,6 +3,7 @@ import { SiteLayout } from "@/components/site-layout";
 import { AreaPage } from "@/pages/area";
 import { ComparePage } from "@/pages/compare";
 import { CondosPage } from "@/pages/condos";
+import { GuidePage } from "@/pages/guide";
 import { HomePage } from "@/pages/home";
 import { NotFoundPage, PrivacyPage, TermsPage, UnauthorizedPage } from "@/pages/legal";
 import { MapPage } from "@/pages/map";
@@ -38,6 +39,8 @@ function Page({ route }: { route: Route }) {
       return <ComparePage />;
     case "area":
       return <AreaPage detail={route.detail} />;
+    case "guide":
+      return <GuidePage />;
     case "privacy":
       return <PrivacyPage />;
     case "terms":

@@ -35,6 +35,12 @@ export function SignInGateView({
         <LogIn />
         ログインして使う
       </Button>
+      <a
+        href="/guide/"
+        className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+      >
+        マチノメでできること
+      </a>
     </section>
   );
 }

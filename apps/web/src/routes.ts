@@ -11,6 +11,7 @@ export type Route =
   | { page: "rankings" }
   | { page: "compare" }
   | { page: "area"; detail: AreaDetail }
+  | { page: "guide" }
   | { page: "privacy" }
   | { page: "terms" }
   | { page: "version" }
@@ -21,6 +22,8 @@ export type PageName = Route["page"];
 
 // ログインしなくても見られるページ。ほかはログインした人にだけ中身を見せる。
 const PUBLIC_PAGES: readonly PageName[] = [
+  "guide",
+
   "privacy",
   "terms",
   "version",
@@ -104,6 +107,12 @@ function baseHeadOf(route: Route): Head {
         description: `${name}の中古戸建の取引価格、推移、空き家率、人口の推移を公的データで確認できます。`,
       };
     }
+    case "guide":
+      return {
+        title: `マチノメでできること | ${SITE}`,
+        description:
+          "市区町村ごとの中古戸建の相場・空き家率・人口の推移を、地図・ランキング・比較で調べられます。",
+      };
     case "privacy":
       return {
         title: `プライバシーポリシー | ${SITE}`,
@@ -133,6 +142,7 @@ export function allRoutes(detailOf: (code: string) => AreaDetail | undefined): R
     { page: "rankings" },
     { page: "compare" },
     ...areas,
+    { page: "guide" },
     { page: "privacy" },
     { page: "terms" },
     { page: "version" },
@@ -148,7 +158,9 @@ export function pageOfPath(pathname: string): { page: PageName; code?: string } 
   if (area) return { page: "area", code: area[1] };
   const name = path.slice(1, -1);
   if (name === "") return { page: "home" };
-  if (["map", "condos", "rankings", "compare", "privacy", "terms", "version"].includes(name)) {
+  if (
+    ["map", "condos", "rankings", "compare", "guide", "privacy", "terms", "version"].includes(name)
+  ) {
     return { page: name as PageName };
   }
   return { page: "not-found" };
