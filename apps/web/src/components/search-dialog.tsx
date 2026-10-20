@@ -1,6 +1,7 @@
 import { prefectureName } from "@area-insight/shared";
 import {
   ArrowRight,
+  BookOpen,
   Columns3,
   CornerDownLeft,
   Home,
@@ -38,6 +39,7 @@ const PAGES: Item[] = [
   { key: "map", href: "/map/", label: "地図で探す", icon: MapIcon },
   { key: "rankings", href: "/rankings/", label: "ランキング", icon: ListOrdered },
   { key: "compare", href: "/compare/", label: "比較", icon: Columns3 },
+  { key: "guide", href: "/guide/", label: "使い方", icon: BookOpen },
 ];
 
 const MAX_RESULTS = 8;

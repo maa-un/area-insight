@@ -10,8 +10,8 @@ export type Route =
   | { page: "condos" }
   | { page: "rankings" }
   | { page: "compare" }
-  | { page: "area"; detail: AreaDetail }
   | { page: "guide" }
+  | { page: "area"; detail: AreaDetail }
   | { page: "privacy" }
   | { page: "terms" }
   | { page: "version" }
@@ -23,7 +23,6 @@ export type PageName = Route["page"];
 // ログインしなくても見られるページ。ほかはログインした人にだけ中身を見せる。
 const PUBLIC_PAGES: readonly PageName[] = [
   "guide",
-
   "privacy",
   "terms",
   "version",
@@ -99,6 +98,12 @@ function baseHeadOf(route: Route): Head {
         title: `比較 | ${SITE}`,
         description: "気になる市区町村を 3 つまで横に並べて比べられます。",
       };
+    case "guide":
+      return {
+        title: `使い方 | ${SITE}`,
+        description:
+          "マチノメで調べられること（取引価格・土地の値段・空き家・人口・マンションの成約事例）と、地図・ランキング・比較の使い方をまとめています。",
+      };
     case "area": {
       const area = findArea(route.detail.code);
       const name = area ? `${prefectureName(area.prefectureCode)}${area.name}` : route.detail.code;
@@ -107,12 +112,6 @@ function baseHeadOf(route: Route): Head {
         description: `${name}の中古戸建の取引価格、推移、空き家率、人口の推移を公的データで確認できます。`,
       };
     }
-    case "guide":
-      return {
-        title: `マチノメでできること | ${SITE}`,
-        description:
-          "市区町村ごとの中古戸建の相場・空き家率・人口の推移を、地図・ランキング・比較で調べられます。",
-      };
     case "privacy":
       return {
         title: `プライバシーポリシー | ${SITE}`,
@@ -141,8 +140,8 @@ export function allRoutes(detailOf: (code: string) => AreaDetail | undefined): R
     { page: "condos" },
     { page: "rankings" },
     { page: "compare" },
-    ...areas,
     { page: "guide" },
+    ...areas,
     { page: "privacy" },
     { page: "terms" },
     { page: "version" },

@@ -1,5 +1,6 @@
 import {
   ArrowUpRight,
+  BookOpen,
   Building2,
   Calculator,
   CalendarClock,
@@ -165,6 +166,19 @@ function Sidebar({ page }: { page: PageName }) {
           );
         })}
       </nav>
+      <div className="mt-5 px-3">
+        <a
+          href="/guide/"
+          aria-current={page === "guide" ? "page" : undefined}
+          className={cn(
+            "flex h-9 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
+            page === "guide" && "bg-card text-foreground shadow-xs ring-1 ring-border",
+          )}
+        >
+          <BookOpen className={cn("size-4", page === "guide" && "text-primary")} aria-hidden />
+          使い方
+        </a>
+      </div>
       <div className="mt-auto flex flex-col gap-3 p-3">
         {dataset.sample && <SampleNotice compact />}
         <p className="px-2 text-[11px] text-muted-foreground">
@@ -182,11 +196,18 @@ function MobileHeader() {
   return (
     <header className="vt-sidebar sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-xl lg:hidden">
       <Logo />
+      <a
+        href="/guide/"
+        aria-label="使い方"
+        className="ml-auto flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <BookOpen className="size-5" aria-hidden />
+      </a>
       <button
         type="button"
         onClick={openSearch}
         aria-label="市区町村を検索"
-        className="ml-auto flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       >
         <Search className="size-5" aria-hidden />
       </button>
@@ -299,6 +320,13 @@ function SiteFooter() {
 
         <div className="flex w-full flex-col items-center gap-3 border-t pt-6">
           <nav className="flex items-center gap-3">
+            <a
+              className="font-medium text-foreground underline-offset-4 hover:underline"
+              href="/guide/"
+            >
+              使い方
+            </a>
+            <span aria-hidden className="h-3 w-px bg-border" />
             <a
               className="font-medium text-foreground underline-offset-4 hover:underline"
               href="/terms/"

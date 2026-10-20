@@ -37,10 +37,10 @@ function Page({ route }: { route: Route }) {
       return <RankingsPage />;
     case "compare":
       return <ComparePage />;
-    case "area":
-      return <AreaPage detail={route.detail} />;
     case "guide":
       return <GuidePage />;
+    case "area":
+      return <AreaPage detail={route.detail} />;
     case "privacy":
       return <PrivacyPage />;
     case "terms":
