@@ -1,5 +1,5 @@
 import { type AreaDetail, prefectureName, RELIABLE_TRADE_COUNT } from "@area-insight/shared";
-import { ArrowUpRight, ChevronRight, Map as MapIcon, MapPin } from "lucide-react";
+import { ArrowUpRight, Building2, ChevronRight, Map as MapIcon, MapPin } from "lucide-react";
 import type { CSSProperties } from "react";
 import { AreaActions } from "@/components/area-actions";
 import { Chip, CountUp, PositionBar } from "@/components/brand";
@@ -21,6 +21,7 @@ import {
   prefectureRank,
   yieldPeriodNote,
 } from "@/data";
+import { condoPrefectures } from "@/data/condos";
 import {
   formatCount,
   formatManYen,
@@ -263,6 +264,14 @@ export function AreaPage({ detail }: { detail: AreaDetail }) {
                   地図で周辺と見比べる
                 </a>
               </Button>
+              {condoPrefectures.includes(area.prefectureCode) && (
+                <Button asChild variant="outline" size="sm">
+                  <a href={`/condos/?pref=${area.prefectureCode}`}>
+                    <Building2 />
+                    {prefecture}のマンション成約事例
+                  </a>
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
