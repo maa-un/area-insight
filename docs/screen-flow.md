@@ -26,6 +26,7 @@ flowchart TB
   cmp -- 0 件のとき --> rank
   area -- パンくずの都道府県 --> rank
   area -- "地図で周辺と見比べる（?area=）" --> map
+  area -- "都道府県のマンション成約事例（?pref=）" --> condos
   area -- 近くの市区町村 --> area
   area -- 比較に追加 --> cmp
   area & cmp -- 収支を計算 --> pf
