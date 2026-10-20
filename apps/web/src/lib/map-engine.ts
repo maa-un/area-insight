@@ -6,6 +6,7 @@ import {
   Map as MapLibreMap,
   NavigationControl,
   Popup,
+  type StyleSpecification,
   setWorkerUrl,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -14,10 +15,20 @@ import type { FeatureCollection } from "geojson";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 // 市区町村の境界（3.0MB、gzip で 0.7MB）。ハッシュ付きのファイルとして出力し、地図のページでだけ取りに行く。
 import boundariesUrl from "@/data/boundaries.json?url";
+import {
+  BASE_PREFIX,
+  BASEMAP_SOURCES,
+  type BasemapId,
+  type BasemapParts,
+  DEFAULT_BASEMAP,
+  rasterParts,
+  vectorParts,
+} from "@/lib/basemaps";
 import { NO_DATA_COLOR, STATION_COLOR } from "@/lib/map-scale";
 
 // MapLibre を扱う部分。地図のある画面でだけ動的に読み込み、他の画面の表示を重くしない。
-// 背景は地理院タイル（淡色地図）。出典表示が利用条件なので attribution に必ず入れる。
+// 背景は地理院タイルか OpenFreeMap（basemaps.ts）。出典表示が利用条件なので attribution に必ず入れる。
+// 背景を切り替えるときは背景の部品だけを入れ替え、上に重ねた境界や地点は作り直さない。
 // 市区町村は境界の面を指標で塗り分ける。色は地物の feature-state に持たせ、指標を切り替えても
 // 3MB の境界を作り直さずに済むようにする。
 
@@ -40,6 +51,9 @@ export type MapController = {
   // 押した市区町村の境界を強調する。null で解除
   selectArea: (code: MunicipalityCode | null) => void;
   setVisible: (layer: LayerId, visible: boolean) => void;
+  // 背景を切り替える。ベクトルの地図のスタイルを取れなかったときは reject し、元の背景のままにする
+  setBasemap: (id: BasemapId) => Promise<void>;
+  getBasemap: () => BasemapId;
   flyTo: (center: LngLat, zoom: number) => void;
   // 吹き出しを開く（開いていれば置き換える）
   showPopup: (at: LngLat, content: PopupContent) => void;
@@ -51,7 +65,22 @@ export type MapController = {
   destroy: () => void;
 };
 
-setWorkerUrl(workerUrl);
+// Worker はファイルの URL から起動すると、そのファイルの応答に付いた CSP に従う。ファイルはハッシュ付きで
+// ブラウザに長くキャッシュされるため、CSP を変えても古い CSP のままタイルの取得を拒み続ける（2026-10 に発生）。
+// 中身を取ってきて blob: の URL から起動し、毎回読み込むページ側の CSP に従わせる。
+// 取得できないときはこれまでどおりファイルの URL から起動する。
+let workerReady: Promise<void> | undefined;
+
+function prepareWorker(): Promise<void> {
+  workerReady ??= fetch(workerUrl)
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const source = await response.blob();
+      setWorkerUrl(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+    })
+    .catch(() => setWorkerUrl(workerUrl));
+  return workerReady;
+}
 
 async function loadBoundaries(): Promise<FeatureCollection> {
   const response = await fetch(boundariesUrl);
@@ -59,6 +88,30 @@ async function loadBoundaries(): Promise<FeatureCollection> {
     throw new Error(`境界ファイルを取得できませんでした（HTTP ${response.status}）`);
   // geometry の中身は検証していないが、形は build-boundaries.mjs の出力どおり
   return Boundaries.parse(await response.json()) as FeatureCollection;
+}
+
+// ベクトルの地図のスタイルは一度だけ取りに行く。失敗したら次の切り替えで取り直す
+const vectorStyles = new Map<string, Promise<StyleSpecification>>();
+
+function loadVectorStyle(url: string): Promise<StyleSpecification> {
+  let style = vectorStyles.get(url);
+  if (!style) {
+    style = fetch(url).then(async (response) => {
+      if (!response.ok)
+        throw new Error(`地図のスタイルを取得できませんでした（HTTP ${response.status}）`);
+      return (await response.json()) as StyleSpecification;
+    });
+    style.catch(() => vectorStyles.delete(url));
+    vectorStyles.set(url, style);
+  }
+  return style;
+}
+
+async function basemapParts(id: BasemapId): Promise<BasemapParts> {
+  const basemap = BASEMAP_SOURCES[id];
+  return basemap.kind === "raster"
+    ? rasterParts(basemap)
+    : vectorParts(await loadVectorStyle(basemap.styleUrl));
 }
 
 const JAPAN: { center: LngLat; zoom: number } = { center: [137.5, 37.8], zoom: 4.2 };
@@ -74,15 +127,30 @@ function collection(features: Feature[]): FeatureCollection {
   };
 }
 
-export function createMap(
+// ページ移動の切り替え（styles.css の @view-transition）は、移る前のページの見た目を写し取ってから動かす。
+// 地図（WebGL の canvas）のあるページでは写し取れず、ブラウザが切り替えを飛ばして
+// 「Uncaught (in promise) AbortError: Transition was skipped」を出す（2026-10、Chrome で確認）。
+// 地図を作ったページだけ、離れるときの切り替えをやめる。地図のページへ入るときは地図がまだ無いので、これまでどおり動く。
+function skipLeaveTransition(): void {
+  if (document.getElementById("no-leave-transition")) return;
+  const style = document.createElement("style");
+  style.id = "no-leave-transition";
+  style.textContent = "@view-transition { navigation: none; }";
+  document.head.append(style);
+}
+
+export async function createMap(
   container: HTMLElement,
   options: {
     initial?: { center: LngLat; zoom: number };
     onSelect: (s: Selection | null) => void;
     // false なら市区町村の境界（3MB）を読まない。成約事例の地図は駅の点だけを使う
     areas?: boolean;
+    basemap?: BasemapId;
   },
 ): Promise<MapController> {
+  skipLeaveTransition();
+  await prepareWorker();
   const initial = options.initial ?? JAPAN;
   const withAreas = options.areas !== false;
   const map = new MapLibreMap({
@@ -90,19 +158,11 @@ export function createMap(
     center: initial.center,
     zoom: initial.zoom,
     minZoom: 3.5,
-    maxZoom: 16,
+    maxZoom: 18,
     attributionControl: { compact: true },
     style: {
       version: 8,
       sources: {
-        gsi: {
-          type: "raster",
-          tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
-          tileSize: 256,
-          maxzoom: 18,
-          attribution:
-            '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>',
-        },
         ...(withAreas && {
           areas: {
             type: "geojson",
@@ -114,7 +174,8 @@ export function createMap(
           },
         }),
       },
-      layers: [{ id: "gsi", type: "raster", source: "gsi" }],
+      // 背景は読み込み後に setBasemap で差し込む
+      layers: [],
     },
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
@@ -125,8 +186,35 @@ export function createMap(
   // 失敗は areasLoaded で伝える。地図の準備が終わる前に失敗しても未処理の reject にしない
   boundaries.catch(() => undefined);
 
+  // 背景の部品。入れ替えるときに外す
+  let basemap: BasemapId | null = null;
+  let baseSources: string[] = [];
+  let request = 0;
+  let removed = false;
+  const setBasemap = async (id: BasemapId): Promise<void> => {
+    if (id === basemap) return;
+    const token = ++request;
+    const parts = await basemapParts(id);
+    // 待つ間に別の背景が選ばれたか、地図を片付けたときは何もしない
+    if (token !== request || removed) return;
+    for (const layer of map.getLayersOrder()) {
+      if (layer.startsWith(BASE_PREFIX)) map.removeLayer(layer);
+    }
+    for (const source of baseSources) map.removeSource(source);
+    if (parts.glyphs) map.setGlyphs(parts.glyphs);
+    if (parts.sprite) map.setSprite(parts.sprite);
+    for (const [name, source] of Object.entries(parts.sources)) map.addSource(name, source);
+    baseSources = Object.keys(parts.sources);
+    // 背景を外した後なので、残っている一番下の部品が上に重ねるものの先頭。その下に入れる
+    const beforeId = map.getLayersOrder()[0];
+    for (const layer of parts.layers) map.addLayer(layer, beforeId);
+    basemap = id;
+  };
+
   return new Promise((resolve) => {
     map.on("load", () => {
+      // 背景が取れなくても上の部品は使えるようにする。既定の背景で取り直す
+      setBasemap(options.basemap ?? DEFAULT_BASEMAP).catch(() => setBasemap(DEFAULT_BASEMAP));
       for (const id of ["land", "stations", "condos"] as const) {
         map.addSource(id, { type: "geojson", data: collection([]) });
       }
@@ -246,6 +334,8 @@ export function createMap(
           map.setLayoutProperty(layer, "visibility", value);
           if (layer === "areas") map.setLayoutProperty("areas-outline", "visibility", value);
         },
+        setBasemap,
+        getBasemap: () => basemap ?? options.basemap ?? DEFAULT_BASEMAP,
         flyTo: (center, zoom) => map.flyTo({ center, zoom }),
         showPopup: (at, content) => {
           popup.setLngLat(at).setDOMContent(popupNode(content));
@@ -265,7 +355,10 @@ export function createMap(
             ],
             { padding: 40, maxZoom: 13, duration: 600 },
           ),
-        destroy: () => map.remove(),
+        destroy: () => {
+          removed = true;
+          map.remove();
+        },
       });
     });
   });

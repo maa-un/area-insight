@@ -388,6 +388,8 @@ function FooterCard({
 //   不動産情報ライブラリ: 利用規約「コンテンツの利用に係るPDL1.0に関する重要情報」と API 利用規約 第 7 条
 //   e-Stat: API 機能のクレジット表示（https://www.e-stat.go.jp/api/api-info/credit）
 //   地理院タイル: 国土地理院の地理院タイル利用規約
+//   背景の地図（建物）: OpenFreeMap のタイル。© OpenMapTiles と © OpenStreetMap contributors（ODbL）を示す。
+//     タイルごとの細かな出所（VMAP0、Landsat8 など）は地図の右下の出典に出す
 //   国土数値情報（駅別乗降客数）: 不動産情報ライブラリの API（XKT015）から取得するため、同ライブラリの出典に含まれる。
 //     どのデータで駅名を付けたかが分かるよう、取引価格の作成の注記に添える
 //   国土数値情報（行政区域）: CC BY 4.0（PDL1.0 の追加記載例どおり、加工したことと作成者を示す）
@@ -469,7 +471,12 @@ function Credits() {
           <ExternalLink href="https://maps.gsi.go.jp/development/ichiran.html">
             地理院タイル
           </ExternalLink>
-          （国土地理院）
+          （国土地理院）。背景を「建物」にしたときは{" "}
+          <ExternalLink href="https://openfreemap.org/">OpenFreeMap</ExternalLink>{" "}
+          <ExternalLink href="https://www.openmaptiles.org/">© OpenMapTiles</ExternalLink>{" "}
+          <ExternalLink href="https://www.openstreetmap.org/copyright">
+            © OpenStreetMap contributors
+          </ExternalLink>
         </>
       ),
     },

@@ -136,7 +136,10 @@ export function TermsPage() {
           <li>
             空き家率・家賃・人口は、政府統計の総合窓口（e-Stat）の統計データをもとに運営者が集計したものです。
           </li>
-          <li>地図の背景には国土地理院の地理院タイルを使用しています。</li>
+          <li>
+            地図の背景には国土地理院の地理院タイルを使用しています。背景を「建物」に切り替えたときは、OpenFreeMap（https://openfreemap.org/）のタイルを使用しています（©
+            OpenMapTiles、© OpenStreetMap contributors）。
+          </li>
           <li>
             地図の市区町村の境界は、国土数値情報（行政区域データ）（国土交通省）（https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html）をもとに合同会社Maa'un
             Japan 作成。頂点を間引いて軽くしたもので、元のデータの境界と一致しない箇所があります。

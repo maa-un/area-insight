@@ -1,6 +1,6 @@
 {
   "name": "@area-insight/web",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "@area-insight/shared": "workspace:*",
     "@clerk/clerk-js": "6.39.0",
     "@clerk/localizations": "4.23.0",
+    "@clerk/ui": "1.40.0",
     "class-variance-authority": "0.7.1",
     "cn": "0.4.0",
     "lucide-react": "1.57.0",

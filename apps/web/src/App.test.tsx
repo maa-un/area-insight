@@ -34,6 +34,7 @@ describe("prerender", () => {
     expect(render(find("map").route)).toContain("地図を読み込んでいます");
     expect(render(find("condos").route)).toContain("マンションの成約事例");
     expect(render(find("privacy").route)).toContain("プライバシーポリシー");
+    expect(find("guide").path).toBe("/guide/");
     expect(render(find("guide").route)).toContain("マチノメでできること");
   });
 
@@ -79,6 +80,7 @@ describe("sign-in gate", () => {
     const signedOut = gated("signed-out");
     expect(signedOut).not.toContain("中身");
     expect(signedOut).toContain("ログインしてご利用ください");
+    expect(signedOut).toContain('href="/guide/"');
   });
 
   it("keeps pages behind the sign-in out of search, but not the legal pages", () => {

@@ -49,12 +49,14 @@ export function hasSessionHint(cookie: string): boolean {
 
 function loadClerk(key: string): Promise<Clerk> {
   clerkPromise ??= (async () => {
-    const [{ Clerk }, { jaJP }] = await Promise.all([
+    // clerk-js v6 はログイン画面などの部品（@clerk/ui）を含まない。CDN から読ませず、束ねたものを渡す
+    const [{ Clerk }, { ClerkUI }, { jaJP }] = await Promise.all([
       import("@clerk/clerk-js"),
+      import("@clerk/ui/entry"),
       import("@clerk/localizations/ja-JP"),
     ]);
     const clerk = new Clerk(key);
-    await clerk.load({ localization: jaJP });
+    await clerk.load({ localization: jaJP, ui: { ClerkUI } });
     clerk.addListener(({ user }) => setState({ status: user ? "signed-in" : "signed-out" }));
     setState({ status: clerk.user ? "signed-in" : "signed-out" });
     return clerk;
