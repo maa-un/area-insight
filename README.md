@@ -4,14 +4,14 @@
 不動産エリア情報を一般ユーザー向けに表示する Web サービス。サービス名は「マチノメ」、URL は
 https://machinome.maa-un.com 。
 
-インフラ（Cloud Run Jobs、BigQuery、Cloud Storage、Firestore、ロードバランサ など）は
+インフラ（BigQuery、Cloud Storage、Firestore、ロードバランサ など）は
 [maa-un/maaun-terraform](https://github.com/maa-un/maaun-terraform) の `envs/dev/gcp` で管理する。
 
 ## 構成
 
 | ディレクトリ | 内容 | 配信 |
 |---|---|---|
-| `apps/batch` | 公的データを取得して BigQuery に保存するバッチ | イメージ → Cloud Run Jobs |
+| `apps/batch` | 公的データを取得して BigQuery に保存するバッチ | GitHub Actions（標準ランナー） |
 | `apps/api` | ログインユーザーのお気に入り等を Firestore に保存する API | イメージ → Cloud Run |
 | `apps/web` | 画面（React + Vite + shadcn/ui）。全ページをビルド時に HTML に書き出す | Cloud Storage + Cloud CDN |
 | `packages/shared` | 3 つで共有する型と zod スキーマ | — |
@@ -34,7 +34,6 @@ pnpm --filter @area-insight/web dev   # 画面をローカルで開く
 
 ```bash
 docker build -f apps/api/Dockerfile -t area-insight-api:local .
-docker build -f apps/batch/Dockerfile -t area-insight-batch:local .
 ```
 
 ## リリースとデプロイ
@@ -42,16 +41,17 @@ docker build -f apps/batch/Dockerfile -t area-insight-batch:local .
 | 契機 | ワークフロー | 処理 |
 |---|---|---|
 | PR | `ci.yml` | lint・型チェック・テスト・ビルド、イメージのビルド確認 |
-| `main` へのマージ、手動 | `deploy.yml` | `ci.yml` を通してから、画面のデプロイと、版が上がっていればバッチ・保存 API のリリース |
-| データ更新の通知（`repository_dispatch: data-updated`） | `deploy.yml` | 画面だけを作り直す |
+| `main` へのマージ、手動 | `deploy.yml` | `ci.yml` を通してから、画面のデプロイと、版が上がっていれば保存 API のリリース |
+| 定期実行、手動 | `batch.yml` | 取得 → 集計 → `web.yml` を呼んで画面更新 |
+| データ更新の通知（移行中の旧 Workflows） | `deploy.yml` | 画面だけを作り直す |
 
 `deploy.yml` の中身:
 
 - **画面**: ビルドしてサイト用バケットへ配置し、CDN キャッシュを消す（マージのたびに行う）
-- **バッチ・保存 API**: ルートの `package.json` の `version` に対応するタグ（`vX.Y.Z`）がまだ無ければ、
+- **保存 API**: ルートの `package.json` の `version` に対応するタグ（`vX.Y.Z`）がまだ無ければ、
   イメージを Artifact Registry へ push し、タグと GitHub Release を作る。タグが既にあれば何もしない
 
-バッチと保存 API の**稼働バージョンは maaun-terraform の tfvars で指定する。**
+保存 API の**稼働バージョンは maaun-terraform の tfvars で指定する。**
 イメージを push しただけでは切り替わらない。
 
 リリース手順:
@@ -61,6 +61,7 @@ docker build -f apps/batch/Dockerfile -t area-insight-batch:local .
 
 GitHub Actions は Workload Identity 連携で GCP に入る（鍵ファイルは持たない）。
 使う値はリポジトリの Actions variables に登録している。
+バッチの設定・定期実行・移行手順は [Actions への移行](docs/batch-actions.md) を参照。
 
 ## ログイン（Clerk）を PropFolio と共通にする
 

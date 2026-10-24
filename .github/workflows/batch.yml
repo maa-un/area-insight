@@ -1,0 +1,141 @@
+name: batch
+run-name: batch (${{ inputs.job || github.event.schedule }})
+
+on:
+  schedule:
+    # JST: 毎月3日04:00、4月10日04:00、10月10日04:00
+    - cron: '0 19 2 * *'
+    - cron: '0 19 9 4 *'
+    - cron: '0 19 9 10 *'
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 更新するデータ（成功後に集計・画面更新）
+        type: choice
+        default: monthly
+        options:
+          - monthly
+          - annual
+          - all
+          - municipalities
+          - transactions
+          - station-transactions
+          - condo-transactions
+          - stations
+          - land-prices
+          - statistics
+          - projections
+          - aggregate
+      all-tiles:
+        description: 地価の全国タイルを取得（通常は既知の地点だけ）
+        type: boolean
+        default: false
+      year:
+        description: 地価の対象年（空欄は今年）
+        type: string
+
+# 取得・集計・画面更新が終わるまで、別の更新を同時実行しない。
+concurrency:
+  group: batch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    # Terraform 側の旧スケジュール停止・WIF 設定を済ませてから有効にする。
+    if: github.ref == 'refs/heads/main' && vars.BATCH_ACTIONS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      land: ${{ steps.plan.outputs.land }}
+      year: ${{ steps.plan.outputs.year }}
+      stage-prefix: ${{ steps.plan.outputs.stage-prefix }}
+    steps:
+      - id: plan
+        env:
+          JOB: ${{ inputs.job }}
+          YEAR: ${{ inputs.year }}
+          SCHEDULE: ${{ github.event.schedule }}
+          DATA_BUCKET: ${{ vars.DATA_BUCKET }}
+        shell: python
+        run: |
+          import datetime, json, os
+          job = os.environ['JOB'] or {
+            '0 19 2 * *': 'monthly',
+            '0 19 9 4 *': 'land-prices',
+            '0 19 9 10 *': 'annual',
+          }[os.environ['SCHEDULE']]
+          monthly = ['municipalities', 'transactions', 'station-transactions', 'condo-transactions']
+          annual = ['statistics', 'projections', 'stations', 'land-prices']
+          commands = {'monthly': monthly, 'annual': annual, 'all': monthly + annual}.get(job, [job])
+          year = os.environ['YEAR'] or str(datetime.datetime.now(datetime.timezone.utc).year)
+          if not year.isdecimal() or not 1900 <= int(year) <= 2100:
+            raise ValueError('invalid year')
+          matrix = []
+          for command in commands:
+            if command == 'aggregate':
+              continue
+            for part in range(8) if command == 'land-prices' else ['']:
+              matrix.append({'command': command, 'part': str(part)})
+          if not matrix:
+            matrix = [{'command': 'noop', 'part': ''}]
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+            out.write('matrix=' + json.dumps({'include': matrix}) + '\n')
+            out.write('land=' + str('land-prices' in commands).lower() + '\n')
+            out.write('year=' + year + '\n')
+            out.write(f"stage-prefix=gs://{os.environ['DATA_BUCKET']}/batch-staging/{os.environ['GITHUB_RUN_ID']}\n")
+
+  land-price-tiles:
+    needs: plan
+    if: needs.plan.outputs.land == 'true'
+    uses: ./.github/workflows/batch-job.yml
+    with:
+      command: prepare-land-price-tiles
+      all-tiles: ${{ inputs.all-tiles || false }}
+      year: ${{ needs.plan.outputs.year }}
+      stage-prefix: ${{ needs.plan.outputs.stage-prefix }}
+
+  fetch:
+    needs: [plan, land-price-tiles]
+    if: >-
+      ${{ !cancelled() && needs.plan.result == 'success' &&
+          (needs.land-price-tiles.result == 'success' || needs.land-price-tiles.result == 'skipped') }}
+    strategy:
+      fail-fast: true
+      # 公的 API への呼び出し間隔を保つため、分割も含めて1ジョブずつ動かす。
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/batch-job.yml
+    with:
+      command: ${{ matrix.command }}
+      part: ${{ matrix.part }}
+      year: ${{ needs.plan.outputs.year }}
+      stage-prefix: ${{ needs.plan.outputs.stage-prefix }}
+
+  load-land-prices:
+    needs: [plan, fetch]
+    if: needs.plan.outputs.land == 'true'
+    uses: ./.github/workflows/batch-job.yml
+    with:
+      command: load-land-prices
+      year: ${{ needs.plan.outputs.year }}
+      stage-prefix: ${{ needs.plan.outputs.stage-prefix }}
+
+  aggregate:
+    needs: [plan, fetch, load-land-prices]
+    if: >-
+      ${{ !cancelled() && needs.fetch.result == 'success' &&
+          (needs.load-land-prices.result == 'success' || needs.load-land-prices.result == 'skipped') }}
+    uses: ./.github/workflows/batch-job.yml
+    with:
+      command: aggregate
+      year: ${{ needs.plan.outputs.year }}
+      stage-prefix: ${{ needs.plan.outputs.stage-prefix }}
+
+  web:
+    needs: aggregate
+    if: ${{ !cancelled() && needs.aggregate.result == 'success' }}
+    uses: ./.github/workflows/web.yml

@@ -1,0 +1,105 @@
+name: batch job
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        type: string
+        required: true
+      part:
+        type: string
+        default: ''
+      year:
+        type: string
+        required: true
+      all-tiles:
+        type: boolean
+        default: false
+      stage-prefix:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  run:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      BIGQUERY_DATASET: ${{ vars.BIGQUERY_DATASET }}
+      DATA_BUCKET: ${{ vars.DATA_BUCKET }}
+      COMMAND: ${{ inputs.command }}
+      PART: ${{ inputs.part }}
+      YEAR: ${{ inputs.year }}
+      ALL_TILES: ${{ inputs.all-tiles }}
+      STAGE_PREFIX: ${{ inputs.stage-prefix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter '@area-insight/batch...' build
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_BATCH_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Read API credentials
+        env:
+          REINFOLIB_SECRET_ID: ${{ vars.REINFOLIB_SECRET_ID }}
+          ESTAT_SECRET_ID: ${{ vars.ESTAT_SECRET_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$COMMAND" in
+            municipalities|transactions|station-transactions|condo-transactions|stations|land-prices)
+              key=$(gcloud secrets versions access latest --secret="$REINFOLIB_SECRET_ID" --project="$GCP_PROJECT_ID")
+              echo "::add-mask::$key"
+              printf 'REINFOLIB_API_KEY=%s\n' "$key" >> "$GITHUB_ENV"
+              ;;
+            statistics)
+              key=$(gcloud secrets versions access latest --secret="$ESTAT_SECRET_ID" --project="$GCP_PROJECT_ID")
+              echo "::add-mask::$key"
+              printf 'ESTAT_APP_ID=%s\n' "$key" >> "$GITHUB_ENV"
+              ;;
+          esac
+
+      - name: Run batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$COMMAND" in
+            noop) exit 0 ;;
+            prepare-land-price-tiles)
+              args=()
+              if [ "$ALL_TILES" = 'true' ]; then args+=(--all-tiles); fi
+              node apps/batch/dist/main.js prepare-land-price-tiles "${args[@]}" --output "$RUNNER_TEMP/z13.json"
+              gcloud storage cp "$RUNNER_TEMP/z13.json" "$STAGE_PREFIX/tiles/z13.json"
+              ;;
+            land-prices)
+              mkdir -p "$RUNNER_TEMP/tiles"
+              gcloud storage cp "$STAGE_PREFIX/tiles/z13.json" "$RUNNER_TEMP/tiles/z13.json"
+              node apps/batch/dist/main.js land-prices --year "$YEAR" --all-tiles \
+                --tiles-directory "$RUNNER_TEMP/tiles" --part "$PART" --parts 8 --output "$RUNNER_TEMP/land-prices.ndjson"
+              # 取得に失敗した場合はここへ進まず、中間ファイルも本番テーブルも更新しない。
+              gcloud storage cp "$RUNNER_TEMP/land-prices.ndjson" "$STAGE_PREFIX/$PART.ndjson"
+              ;;
+            load-land-prices)
+              node apps/batch/dist/main.js load-land-prices --year "$YEAR" --parts 8 --source-prefix "$STAGE_PREFIX"
+              ;;
+            municipalities|transactions|station-transactions|condo-transactions|stations|statistics|projections|aggregate)
+              node apps/batch/dist/main.js "$COMMAND"
+              ;;
+            *) echo '::error::Unknown batch command'; exit 1 ;;
+          esac
