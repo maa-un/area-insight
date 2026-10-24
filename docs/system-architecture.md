@@ -56,7 +56,7 @@ flowchart LR
 ```
 area-insight/
 ├─ apps/
-│  ├─ batch/    取得・集計（Cloud Run Jobs）
+│  ├─ batch/    取得・集計（GitHub Actions）
 │  ├─ api/      保存 API（Cloud Run）
 │  └─ web/      画面（静的サイト）
 ├─ packages/

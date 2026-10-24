@@ -12,6 +12,8 @@
 | `src/main.ts` | 引数でジョブを選び、実装を組み立てる |
 | `tiles/z11.json`、`z13.json` | 陸地を含むタイルの一覧（2,298 枚 / 28,897 枚） |
 
+実行と移行の詳細は [GitHub Actions バッチ](../batch-actions.md)。
+
 ## 2. 起動
 
 ```
@@ -19,6 +21,8 @@ node dist/main.js <ジョブ> [--recent N] [--quarter YYYYQn ...] [--year YYYY] 
 ```
 
 - 結果は 1 行の JSON（`{job, 件数...}`）を標準出力へ
+- 地価の分割取得: `land-prices --year YYYY --all-tiles --part 0 --parts 8 --output /tmp/0.ndjson`
+- 全分割の一括ロード: `load-land-prices --year YYYY --parts 8 --source-prefix gs://bucket/batch-staging/run-id`
 - 失敗はメッセージだけを stderr に出して exit 1（URL・鍵は含めない）
 
 ## 3. ジョブ

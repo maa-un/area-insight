@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// 環境変数は Cloud Run Jobs（Terraform）から渡す。API キーとアプリケーション ID は Secret Manager から注入される。
+// 環境変数は GitHub Actions から渡す。API キーとアプリケーション ID は Secret Manager から取得する。
 // 使うキーはジョブごとに違うため、キーは任意にして、使うジョブで requireSecret を呼ぶ。
 const Env = z.object({
   GCP_PROJECT_ID: z.string().min(1),
