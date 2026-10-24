@@ -42,13 +42,19 @@ GitHub 標準ランナーは1ジョブ最大6時間。取得・集計はそれ�
 
 認証は Workload Identity Federation。batch SA の BigQuery dataEditor・jobUser、データ用バケット objectAdmin、既存2 Secret の secretAccessor を使う。deploy SA にはデータの書き込み権限を付けない。PR と fork からは本番バッチを実行しない。認証ファイル・秘密値・raw を Actions artifacts に残さない。
 
-## 移行順序
+## 移行記録
+
+2026年10月24日、[全ジョブの実動確認](https://github.com/maa-un/area-insight/actions/runs/40049955714) が成功し、BigQueryの全16テーブル、GCS exports 8種類、サイトの更新を確認した。[Terraform PR #88](https://github.com/maa-un/maaun-terraform/pull/88) により旧基盤29リソースを撤去し、サブモジュールとデータ基盤・保存APIを保持した。
+
+## 移行時に行った手順
 
 1. maaun-terraform の platform に batch SA の WIF 権限と `batch-staging/` だけを対象にした7日保持を追加し、plan を確認して適用する。
 2. app 側で旧 Cloud Scheduler を一時停止する。Cloud Run Jobs と Workflows はこの時点では残す。実行中の旧バッチがあれば完了を待つ。
 3. このリポジトリの変更を main にマージし、上記 variables と `BATCH_ACTIONS_ENABLED=true` を設定する。
 4. Actions を手動実行し、取得・ロード・集計・画面更新の成功と出力の件数・対象年・表示を確認する。確認が済むまでは旧リソースを destroy しない。
-5. maaun-terraform の app ルートから旧 Cloud Run Jobs、Workflows、Scheduler とそれだけに必要な IAM、変数・出力・テンプレートを外す。plan が旧バッチだけの削除であることを確認して適用し、実リソースを destroy する。`modules/` は残す。
-6. platform 側の旧 Workflows SA・通知専用 Secret・バッチの Artifact Registry も不要なら、参照を外した後に別 plan で撤去する。batch SA・APIキー・BigQuery・データ用バケットは Actions で引き続き使う。保存 API・配信・Firestore は残す。
+5. maaun-terraform のルート構成から旧 Cloud Run Jobs、Workflows、Scheduler と専用 IAM、変数・出力・テンプレート、旧 Workflows SA、通知専用 Secret、バッチ用 Artifact Registry の参照を外す。`modules/` のソースは残す。
+6. platform / app の plan が旧バッチだけの削除であることを確認し、platform → app の順に通常の apply で撤去する。batch SA・APIキー・BigQuery・データ用バケットは Actions で引き続き使う。保存 API・配信・Firestore は残す。
 
 削除のためにルート全体へ `terraform destroy` は実行しない。ルート構成から対象リソースを外し、通常の apply で該当リソースだけ destroy する。
+
+旧 Workflows SA の削除で専用 IAM 11件は削除済み SA の参照になった。プロジェクト IAM 2件は該当参照を削除し、ジョブ IAM 9件はジョブ本体の削除で解消した。通常の apply の削除件数は platform 5件・app 13件で、撤去後は両レイヤの plan に差分がないことを確認した。

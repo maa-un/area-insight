@@ -16,7 +16,7 @@
 
 | 部品 | 責務 | 実行環境 | 詳細 |
 |---|---|---|---|
-| `apps/batch` | 公的データの取得 → raw 保存 → 集計 → 書き出し | Cloud Run Jobs | [バッチ](detailed-design/batch.md) |
+| `apps/batch` | 公的データの取得 → raw 保存 → 集計 → 書き出し | GitHub Actions の標準ランナー | [バッチ](detailed-design/batch.md) |
 | `apps/api` | 本人のお気に入り等の読み書き、退会への追従 | Cloud Run | [保存 API](detailed-design/api.md) |
 | `apps/web` | 書き出しを取り込み全ページを HTML に | Cloud Storage + Cloud CDN | [画面](detailed-design/web.md) |
 | `packages/shared` | 型・zod スキーマ・共通の定数 | — | 各詳細設計 |
@@ -66,7 +66,7 @@ flowchart LR
 | 要件 | 実現方法 |
 |---|---|
 | 冪等性 | ロードジョブの `WRITE_TRUNCATE` で同じ範囲を置き換える。集計は `CREATE OR REPLACE` |
-| 失敗に強い | 取得が途中で失敗したらロードしない。Workflows は失敗したら後続を止め、画面は作り直さない |
+| 失敗に強い | 取得が途中で失敗したらロードしない。Actions は取得失敗時に集計・配信を止め、画面は作り直さない |
 | 配信の切り替え | ハッシュ付き assets を先に、HTML を後に置く。古い assets は残す |
 | 外部データの検証 | API 応答・リクエスト本文・書き出し・保存済みデータを zod で検証する |
 | 認証 | Clerk のセッション JWT を JWKS で検証。`iss` と `azp` を確認する |

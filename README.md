@@ -43,7 +43,7 @@ docker build -f apps/api/Dockerfile -t area-insight-api:local .
 | PR | `ci.yml` | lint・型チェック・テスト・ビルド、イメージのビルド確認 |
 | `main` へのマージ、手動 | `deploy.yml` | `ci.yml` を通してから、画面のデプロイと、版が上がっていれば保存 API のリリース |
 | 定期実行、手動 | `batch.yml` | 取得 → 集計 → `web.yml` を呼んで画面更新 |
-| データ更新の通知（移行中の旧 Workflows） | `deploy.yml` | 画面だけを作り直す |
+| 互換用のデータ更新通知（`repository_dispatch`） | `deploy.yml` | 画面だけを作り直す |
 
 `deploy.yml` の中身:
 

@@ -3,7 +3,7 @@
 正は [maa-un/maaun-terraform](https://github.com/maa-un/maaun-terraform) の `envs/dev/gcp`。リージョンは `asia-northeast1`（東京）。
 
 - `platform` レイヤ: 長く使うもの（データ、バケット、DNS、証明書、SA、Secret）
-- `app` レイヤ: 作り直せるもの（Cloud Run、Workflows、Scheduler、LB、Cloud Armor）
+- `app` レイヤ: 作り直せるもの（保存 API の Cloud Run、LB、Cloud Armor）
 
 リソース名の `<prefix>` は Terraform の `name_prefix`。
 
@@ -12,7 +12,12 @@
 ```mermaid
 flowchart TB
   user([利用者])
-  gh[GitHub Actions]
+  subgraph actions[GitHub Actions]
+    trigger[schedule / 手動]
+    batch[batch.yml<br/>取得・集計 / 標準ランナー]
+    gh[web.yml<br/>静的ビルド・配信]
+    deploy[deploy.yml<br/>main マージ / API リリース]
+  end
   clerkwh[Clerk Webhook]
 
   subgraph net[ネットワーク]
@@ -30,15 +35,12 @@ flowchart TB
   end
 
   subgraph upd[データ更新]
-    sch[Cloud Scheduler<br/>monthly / land-prices / annual]
-    wf[Workflows<br/>&lt;prefix&gt;-area-insight-update]
-    jobs[Cloud Run Jobs × 9<br/>&lt;prefix&gt;-area-insight-*]
     bq[(BigQuery dataset<br/>&lt;prefix&gt;_area_insight)]
     data[(GCS<br/>&lt;prefix&gt;-area-insight-data-*)]
   end
 
   sm[Secret Manager]
-  ar[Artifact Registry<br/>area-insight-api / -batch]
+  ar[Artifact Registry<br/>area-insight-api]
   mon[Cloud Monitoring<br/>API アラート 4 種]
 
   user --> dns --> lb
@@ -46,14 +48,15 @@ flowchart TB
   lb -- "/api/*" --> armor --> run --> fs
   clerkwh --> lb
 
-  sch --> wf --> jobs --> bq
-  jobs --> data
-  wf -- repository_dispatch --> gh
+  trigger --> batch --> bq
+  bq -- EXPORT DATA --> data
+  batch -- 集計成功後 --> gh
+  deploy --> gh
   gh -- exports を取得 --> data
   gh -- HTML / assets --> site
-  gh -- イメージ push --> ar
-  ar -.-> jobs & run
-  sm -.-> jobs & run & wf
+  deploy -- API イメージ push --> ar
+  ar -.-> run
+  sm -.-> batch & run
   run -.-> mon
 ```
 
@@ -62,40 +65,27 @@ flowchart TB
 | 種類 | 名前 | 役割 |
 |---|---|---|
 | BigQuery | `<prefix>_area_insight` | raw と集計のテーブル（[ER 図](er-diagram.md)） |
-| GCS | `<prefix>-area-insight-data-<project>` | 書き出し `exports/`。非公開 |
+| GCS | `<prefix>-area-insight-data-<project>` | 書き出し `exports/` と分割取得用 `batch-staging/`。非公開。中間ファイルだけ7日保持 |
 | GCS | `<prefix>-area-insight-site-<project>` | 静的サイト。読み取り公開。404 は `404.html` |
 | Firestore | `(default)` | 利用者のデータ。削除保護あり |
-| Cloud Run Jobs | `<prefix>-area-insight-<ジョブ名>` | バッチ 9 ジョブ（下表） |
 | Cloud Run | `<prefix>-area-insight-api` | 保存 API。CPU 1 / 512Mi、`/healthz` で起動確認 |
-| Workflows | `<prefix>-area-insight-update` | ジョブを順に実行し、最後に GitHub へ通知 |
-| Cloud Scheduler | `<prefix>-area-insight-{monthly,land-prices,annual}` | Workflows を起動 |
 | LB | `<prefix>-area-insight` | `/api/*` は API、それ以外はサイト。HTTP は HTTPS へ 301 |
 | Cloud Armor | `-edge` / `-api` | 公開前の国制限（任意） / API のレート制限 |
 | Secret Manager | 下表 | API キーなど。値は手で登録 |
-| Artifact Registry | `area-insight-api`、`area-insight-batch` | イメージ（`vX.Y.Z`） |
+| Artifact Registry | `area-insight-api` | 保存 API のイメージ（`vX.Y.Z`） |
 | Monitoring | API のアラート | インスタンス数上限近く、5xx、429、p95 遅延 |
 
 旧ドメイン `gc.maa-un.com` は同じ LB で受け、画面は `machinome.maa-un.com` へ 301。`/api/*` は転送しない（Webhook 用）。
 
 ## バッチのジョブ
 
-| ジョブ | メモリ | 上限時間 |
-|---|---|---|
-| municipalities | 512Mi | 1h |
-| transactions | 1Gi | 1h |
-| station-transactions | 2Gi | 2h |
-| condo-transactions | 1Gi | 2h |
-| stations | 512Mi | 2h |
-| land-prices | 2Gi | 24h |
-| statistics | 512Mi | 30m |
-| projections | 1Gi | 30m |
-| aggregate | 512Mi | 30m |
+`apps/batch` を Actions 上でビルドし、9種類のジョブ（取得8種類と集計）を動かす。各実行の上限は350分。地価は開始時にタイル一覧を固定し、8分割を順に取得する。全部成功した後に1回のロードで対象年を置き換える。
 
-すべて CPU 1、再試行 1 回。中身は [バッチの詳細設計](detailed-design/batch.md)。
+取得と集計の中身は [詳細設計](detailed-design/batch.md)、実行・再実行と設定は [GitHub Actions バッチ](batch-actions.md) を参照。
 
 ## 定期実行
 
-時刻は日本時間。各回の最後に `aggregate` を実行し、画面を作り直す。
+時刻は日本時間。`batch.yml` の schedule が起動する。各回の最後に `aggregate` を実行し、画面を作り直す。
 
 | スケジュール | 日時 | ジョブ |
 |---|---|---|
@@ -107,8 +97,7 @@ flowchart TB
 
 | SA | 使う部品 | 権限 |
 |---|---|---|
-| `batch` | Cloud Run Jobs | BigQuery dataEditor・jobUser、データ用バケット objectAdmin、Secret（reinfolib、e-Stat） |
-| `wf` | Workflows / Scheduler | ジョブの run.invoker、workflows.invoker、Secret（GitHub 通知用トークン） |
+| `batch` | GitHub Actions のバッチ | BigQuery dataEditor・jobUser、データ用バケット objectAdmin、Secret（reinfolib、e-Stat） |
 | `api` | 保存 API | Firestore（datastore.user）、Secret（Clerk Webhook 署名鍵） |
 | `deploy` | GitHub Actions | Artifact Registry writer、データ用バケット読み取り、サイト用バケット書き込み、CDN の無効化だけのカスタムロール |
 
@@ -120,8 +109,9 @@ GitHub Actions は Workload Identity 連携で入る。信頼するのは area-i
 |---|---|---|
 | `reinfolib-api-key` | batch | `REINFOLIB_API_KEY` |
 | `estat-app-id` | batch | `ESTAT_APP_ID` |
-| `github-dispatch-token` | wf | （Workflows が直接読む） |
 | `clerk-webhook-secret` | api | `CLERK_WEBHOOK_SECRET` |
+
+2026年10月24日に Actions の全取得・集計・画面更新を確認し、旧 Cloud Run Jobs・Workflows・Scheduler と専用リソース29件を Terraform で撤去した。`modules/` のソース、データ基盤、保存 API は保持している。
 
 ## 配信の設定
 
