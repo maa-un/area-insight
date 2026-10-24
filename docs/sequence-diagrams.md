@@ -7,31 +7,29 @@
 ```mermaid
 sequenceDiagram
   autonumber
-  participant S as Cloud Scheduler
-  participant W as Workflows
-  participant J as Cloud Run Jobs
+  participant A as GitHub Actions batch.yml
   participant P as 公的 API
   participant B as BigQuery
   participant G as GCS データ用
-  participant A as GitHub Actions
+  participant W as GitHub Actions web.yml
   participant T as GCS サイト用 / CDN
 
-  S->>W: 起動（jobs = [...]）
-  loop jobs の順に
-    W->>J: ジョブ実行（終わるまで待つ）
-    J->>P: 取得（1 秒間隔、5xx は再試行）
-    J->>B: ロードジョブ（WRITE_TRUNCATE）
+  Note over A: schedule / 手動で main のコードをビルド
+  loop 地価以外の取得ジョブを1つずつ実行
+    A->>P: 取得（1秒間隔、5xxは再試行）
+    A->>B: ロードジョブ（WRITE_TRUNCATE）
   end
-  Note over W,J: 最後のジョブは aggregate
-  J->>B: 集計テーブルを CREATE OR REPLACE
-  J->>G: EXPORT DATA（export_id 付き）
-  W->>A: repository_dispatch（data-updated）
-  A->>G: exports/ を取得
-  A->>A: prepare-data → build → prerender
-  A->>T: assets を置く → HTML を置く → CDN 無効化
+  Note over A,G: 地価は固定一覧の8分割を順に取得しGCSへ保存
+  A->>B: 全分割成功後、1回のロードで対象年を置換
+  A->>B: 全取得成功後に集計（CREATE OR REPLACE）
+  B->>G: EXPORT DATA（export_id付き）
+  A->>W: 再利用ワークフローを呼ぶ
+  W->>G: exports/ を取得
+  W->>W: prepare-data → build → prerender
+  W->>T: assets → HTML → CDN無効化
 ```
 
-途中のジョブが失敗したら、Workflows はそこで止まる。raw も画面も前回のまま残る。
+取得に失敗したジョブはロードせず、その対象範囲のrawを前回のまま残す。地価も全分割が成功するまで本番テーブルを更新しない。取得が1つでも失敗すれば集計・画面更新は実行しない（それ以前に成功した別ジョブのrawは更新済み）。
 
 ## 2. 閲覧
 

@@ -12,7 +12,7 @@
 | Clerk | 認証 / Webhook | 画面・保存 API | 公開キー、JWKS、svix 署名 |
 | PropFolio | 送客 | 画面 | なし（URL クエリ） |
 | 地理院タイル / OpenFreeMap | 地図の背景 | 画面 | なし（出典の表示が条件） |
-| GitHub | 画面の作り直しの通知 | Workflows | トークン（Secret Manager） |
+| GitHub Actions → Google Cloud | 取得・集計・画面配信 | バッチ・web/deploy ワークフロー | Workload Identity Federation |
 
 ## 公的データ（バッチ）
 
@@ -104,4 +104,4 @@ Webhook:
 
 ## GitHub
 
-Workflows がデータ更新の最後に `repository_dispatch`（`data-updated`）を送り、`deploy.yml` が画面だけを作り直す。
+`batch.yml` が定期・手動で取得と集計を実行し、成功後に再利用ワークフロー `web.yml` を呼んで画面を作り直す。GCP への認証は既存の batch / deploy SA を使う Workload Identity Federation。通知用の GitHub トークンは不要。
