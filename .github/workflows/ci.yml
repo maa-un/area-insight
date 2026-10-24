@@ -14,6 +14,27 @@ permissions:
   contents: read
 
 jobs:
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 過去に追加して削除した秘密情報も検出する。
+          fetch-depth: 0
+          persist-credentials: false
+
+      # CLI を直接使うため、サービス用トークンやライセンスは不要。
+      # 検出した秘密値はログに出さず、検出時は非ゼロで終了する。
+      - name: Scan Git history with Gitleaks
+        run: >-
+          docker run --rm --network none
+          --volume "$PWD:/repo:ro"
+          ghcr.io/gitleaks/gitleaks:v8.30.1
+          git /repo --log-opts="--all --full-history"
+          --redact --ignore-gitleaks-allow --no-banner
+
   check:
     name: lint / typecheck / test / build
     runs-on: ubuntu-latest
