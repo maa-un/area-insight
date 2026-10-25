@@ -28,7 +28,8 @@ export function SignInGateView({
       <Eyebrow>会員限定</Eyebrow>
       <h1 className="text-2xl font-bold tracking-tight">ログインしてご利用ください</h1>
       <p className="text-sm leading-7 text-muted-foreground">
-        マチノメの市区町村データ・地図・ランキングは、ログインした方だけが見られます。Google
+        Maa'un
+        不動産取引事例の市区町村データ・地図・ランキングは、ログインした方だけが見られます。Google
         アカウントかメールアドレスでログインできます。
       </p>
       <Button size="lg" onClick={() => void openSignIn()}>
@@ -39,7 +40,7 @@ export function SignInGateView({
         href="/guide/"
         className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
       >
-        マチノメでできること
+        Maa'un 不動産取引事例でできること
       </a>
     </section>
   );

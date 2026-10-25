@@ -35,7 +35,7 @@ describe("prerender", () => {
     expect(render(find("condos").route)).toContain("マンションの成約事例");
     expect(render(find("privacy").route)).toContain("プライバシーポリシー");
     expect(find("guide").path).toBe("/guide/");
-    expect(render(find("guide").route)).toContain("マチノメでできること");
+    expect(render(find("guide").route)).toContain("Maa&#x27;un 不動産取引事例でできること");
   });
 
   it("renders the deployed version without listing it for search", () => {

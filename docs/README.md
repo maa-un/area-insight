@@ -1,6 +1,6 @@
 # area-insight 仕様書
 
-一般ユーザー向けの不動産エリア分析サービス「**マチノメ**」（https://machinome.maa-un.com）の仕様をまとめる。
+一般ユーザー向けの不動産エリア分析サービス「**Maa'un 不動産取引事例**」（https://machinome.maa-un.com）の仕様をまとめる。
 
 ## 資料一覧
 

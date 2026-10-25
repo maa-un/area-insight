@@ -59,7 +59,7 @@ export function pathOf(route: Route): string | undefined {
   return `/${file.slice(0, -"index.html".length)}`;
 }
 
-const SITE = "マチノメ";
+const SITE = "Maa'un 不動産取引事例";
 
 type Head = { title: string; description: string; noindex?: true };
 
@@ -102,7 +102,7 @@ function baseHeadOf(route: Route): Head {
       return {
         title: `使い方 | ${SITE}`,
         description:
-          "マチノメで調べられること（取引価格・土地の値段・空き家・人口・マンションの成約事例）と、地図・ランキング・比較の使い方をまとめています。",
+          "Maa'un 不動産取引事例で調べられること（取引価格・土地の値段・空き家・人口・マンションの成約事例）と、地図・ランキング・比較の使い方をまとめています。",
       };
     case "area": {
       const area = findArea(route.detail.code);

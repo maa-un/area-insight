@@ -181,7 +181,7 @@ export function GuidePage() {
       <PageHeader
         icon={BookOpen}
         eyebrow="使い方"
-        title="マチノメでできること"
+        title="Maa'un 不動産取引事例でできること"
         description={`物件を探す前の「どの町で買うか」を決めるための調査ツールです。全国 ${dataset.areas.length.toLocaleString("ja-JP")} 市区町村の取引価格・地価・空き家・人口を、国の公的データで調べて比べられます。`}
         actions={<StartButton />}
       />
