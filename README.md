@@ -1,7 +1,7 @@
 # area-insight
 
 公的データ（国土交通省 不動産情報ライブラリ、e-Stat）をバッチで取得し、市区町村ごとの
-不動産エリア情報を一般ユーザー向けに表示する Web サービス。サービス名は「マチノメ」、URL は
+不動産エリア情報を一般ユーザー向けに表示する Web サービス。サービス名は「Maa'un 不動産取引事例」、URL は
 https://machinome.maa-un.com 。
 
 インフラ（BigQuery、Cloud Storage、Firestore、ロードバランサ など）は
@@ -82,7 +82,7 @@ machinome.maa-un.com は Clerk に登録したドメイン maa-un.com のサブ�
 
 2 と 3 の間は、画面（開発インスタンス）と保存 API（本番）が食い違い、保存が失敗する。続けて行う。
 
-Prop Folio アプリはメールアドレスとパスワードでのログインも有効なので、マチノメのログイン画面にも出る。
+Prop Folio アプリはメールアドレスとパスワードでのログインも有効なので、Maa'un 不動産取引事例のログイン画面にも出る。
 
 ## ドメインを gc.maa-un.com から machinome.maa-un.com に移す
 

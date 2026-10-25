@@ -95,7 +95,10 @@ function Logo({ className }: { className?: string }) {
       <span className="relative flex size-8 items-center justify-center overflow-hidden rounded-[10px] bg-gradient-to-br from-primary to-[oklch(0.5_0.15_32)] text-primary-foreground shadow-sm shadow-primary/30 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
         <MapPin className="size-4.5" aria-hidden />
       </span>
-      マチノメ
+      <span className="flex flex-col leading-tight">
+        <span>Maa'un</span>
+        <span className="text-xs font-medium">不動産取引事例</span>
+      </span>
     </a>
   );
 }
